@@ -40,26 +40,26 @@ export default function AuthPage() {
             
             <form className="space-y-5" onSubmit={(e) => e.preventDefault()}>
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">Email</label>
+                <label className="text-[10px] font-bold text-gray-600 uppercase tracking-widest ml-1">Email</label>
                 <div className="relative">
                   <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                  <input type="email" placeholder="name@email.com" className="w-full pl-11 pr-4 py-3.5 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-[#471396] outline-none transition-all text-sm" />
+                  <input type="email" placeholder="name@email.com" className="w-full pl-11 pr-4 py-3.5 bg-gray-50 text-gray-600 border border-gray-100 rounded-xl focus:ring-2 focus:ring-[#471396] outline-none transition-all text-sm" />
                 </div>
               </div>
 
               <div className="space-y-1">
                 <div className="flex justify-between items-center px-1">
-                  <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Password</label>
-                  <button type="button" className="text-[10px] font-bold text-[#471396] hover:underline">Forgot?</button>
+                  <label className="text-[10px] font-bold text-gray-600 uppercase tracking-widest">Password</label>
+                  {/* <button type="button" className="text-[10px] font-bold text-[#471396] hover:underline">Forgot?</button> */}
                 </div>
                 <div className="relative">
                   <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                  <input type="password" placeholder="••••••••" className="w-full pl-11 pr-4 py-3.5 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-[#471396] outline-none transition-all text-sm" />
+                  <input type="password" placeholder="••••••••" className="w-full pl-11 pr-4 py-3.5 bg-gray-50 text-gray-600 border border-gray-100 rounded-xl focus:ring-2 focus:ring-[#471396] outline-none transition-all text-sm" />
                 </div>
               </div>
 
               <button className="w-full py-4 bg-[#471396] text-white rounded-xl font-bold text-sm shadow-lg shadow-purple-900/20 active:scale-[0.98] transition-all">
-                Sign In
+                Log In
               </button>
             </form>
           </div>
@@ -73,31 +73,31 @@ export default function AuthPage() {
             
             <form className="space-y-4" onSubmit={(e) => e.preventDefault()}>
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">Your Name</label>
+                <label className="text-[10px] font-bold text-gray-600 uppercase tracking-widest ml-1">Your Name</label>
                 <div className="relative">
                   <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                  <input type="text" placeholder="Full Name" className="w-full pl-11 pr-4 py-3.5 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-[#471396] outline-none transition-all text-sm" />
+                  <input type="text" placeholder="Full Name" className="w-full pl-11 pr-4 py-3.5 bg-gray-50 text-gray-600 border border-gray-100 rounded-xl focus:ring-2 focus:ring-[#471396] outline-none transition-all text-sm" />
                 </div>
               </div>
 
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">Email Address</label>
+                <label className="text-[10px] font-bold text-gray-600 uppercase tracking-widest ml-1">Email Address</label>
                 <div className="relative">
                   <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                  <input type="email" placeholder="name@email.com" className="w-full pl-11 pr-4 py-3.5 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-[#471396] outline-none transition-all text-sm" />
+                  <input type="email" placeholder="name@email.com" className="w-full pl-11 pr-4 py-3.5 bg-gray-50 text-gray-600 border border-gray-100 rounded-xl focus:ring-2 focus:ring-[#471396] outline-none transition-all text-sm" />
                 </div>
               </div>
 
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">Set Password</label>
+                <label className="text-[10px] font-bold text-gray-600 uppercase tracking-widest ml-1">Set Password</label>
                 <div className="relative">
                   <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                  <input type="password" placeholder="••••••••" className="w-full pl-11 pr-4 py-3.5 bg-gray-50 border border-gray-100 rounded-xl focus:ring-2 focus:ring-[#471396] outline-none transition-all text-sm" />
+                  <input type="password" placeholder="••••••••" className="w-full pl-11 pr-4 py-3.5 bg-gray-50 text-gray-600 border border-gray-100 rounded-xl focus:ring-2 focus:ring-[#471396] outline-none transition-all text-sm" />
                 </div>
               </div>
 
               <button className="w-full py-4 bg-[#FFCC00] text-[#471396] rounded-xl font-bold text-sm shadow-lg shadow-yellow-500/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2">
-                Next: Business Profile <ArrowRight className="w-4 h-4" />
+                Sign Up<ArrowRight className="w-4 h-4" />
               </button>
             </form>
           </div>
@@ -121,7 +121,7 @@ export default function AuthPage() {
 
           <div className="space-y-6">
             <h3 className="text-2xl font-bold">
-              {isLogin ? "Join as a Partner" : "Welcome Back"}
+              {isLogin ? "New To Bhojanalya" : "Welcome Back"}
             </h3>
             <p className="text-white/70 text-sm leading-relaxed max-w-[280px]">
               {isLogin 
