@@ -18,7 +18,7 @@ export default function LandingPage() {
   const router = useRouter();
   const { scrollY } = useScroll();
 
-  // --- LOGO ANIMATION LOGIC ---
+  // --- LOGO & UI ANIMATION LOGIC ---
   const logoScale = useTransform(scrollY, [0, 300], [2.5, 0.45]);
   const logoY = useTransform(scrollY, [0, 300], ["0vh", "-45vh"]);
   const heroContentOpacity = useTransform(scrollY, [0, 150], [1, 0]);
@@ -30,16 +30,21 @@ export default function LandingPage() {
 
       {/* --- STICKY NAV --- */}
       <motion.nav
-        style={{ backgroundColor: "#471396", opacity: navBgOpacity }}
+        style={{ 
+          backgroundColor: "#471396", 
+          opacity: navBgOpacity,
+          backdropFilter: "blur(10px)" 
+        }}
         className="fixed top-0 w-full z-[100] h-20 px-6 md:px-12 flex items-center justify-between border-b border-white/10 shadow-xl pointer-events-none"
       >
         <div className="w-24 hidden md:block" />
         <div className="flex-1" />
+        {/* Styled Navbar Button: Glass effect with border */}
         <button
           onClick={() => router.push("/auth")}
-          className="px-6 py-2 rounded-lg bg-[#FFCC00] text-[#471396] font-bold hover:bg-white transition-colors text-sm pointer-events-auto"
+          className="px-5 py-2 rounded-full bg-[#FFCC00] text-[#471396] font-bold hover:bg-white hover:shadow-[0_0_20px_rgba(255,204,0,0.4)] transition-all duration-300 text-sm pointer-events-auto border border-white/20"
         >
-          Login/SignUp
+          Login / SignUp
         </button>
       </motion.nav>
 
@@ -79,12 +84,18 @@ export default function LandingPage() {
           transition={{ delay: 1.2 }}
           className="relative flex flex-col items-center mt-[450px] md:mt-[520px] text-center z-20 px-6"
         >
-          <p className="text-white/70 text-sm md:text-lg max-w-xl mb-10 font-medium tracking-wide">
+          <p className="text-white/70 text-sm md:text-lg max-w-xl mb-8 font-medium tracking-wide">
             The premium onboarding and management platform for organization and restaurant partners.
           </p>
-          <button onClick={() => router.push("/auth")} className="px-14 py-5 rounded-full bg-[#FFCC00] text-[#2e0561] font-black uppercase tracking-[0.2em] hover:scale-105 transition-all shadow-2xl shadow-yellow-500/30 text-lg">
-            Login/SignUp
+          
+          {/* Hero Button: Smaller (px-10 py-4) and more refined */}
+          <button 
+            onClick={() => router.push("/auth")} 
+            className="px-10 py-4 rounded-full bg-[#FFCC00] text-[#2e0561] font-black uppercase tracking-[0.15em] hover:scale-105 active:scale-95 transition-all shadow-xl shadow-yellow-500/20 text-base"
+          >
+            Login / SignUp
           </button>
+
           <motion.div animate={{ y: [0, 15, 0] }} transition={{ repeat: Infinity, duration: 2.5 }} className="mt-16 opacity-30">
             <ChevronDown className="w-10 h-10 text-[#FFCC00]" />
           </motion.div>
@@ -123,8 +134,6 @@ export default function LandingPage() {
         />
       </section>
 
-      
-
       {/* --- FINAL SMALL FOOTER --- */}
       <footer className="py-10 bg-white border-t border-gray-100 text-center">
         <p className="text-gray-400 text-xs font-bold tracking-[0.3em] uppercase">
@@ -136,7 +145,6 @@ export default function LandingPage() {
 }
 
 // --- SUB-COMPONENTS ---
-
 function FeatureRow({ icon, title, desc, imageBg, reverse }: any) {
   return (
     <div className="max-w-7xl mx-auto px-6 grid grid-cols-1 md:grid-cols-2 gap-16 items-center">

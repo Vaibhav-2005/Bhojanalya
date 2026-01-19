@@ -58,7 +58,7 @@ export default function AuthPage() {
                 </div>
               </div>
 
-              <button className="w-full py-4 bg-[#471396] text-white rounded-xl font-bold text-sm shadow-lg shadow-purple-900/20 active:scale-[0.98] transition-all">
+              <button className="w-full py-4 bg-[#471396] text-white rounded-xl font-bold text-sm shadow-lg shadow-purple-900/20 active:scale-[0.98] transition-all" onClick={() => router.push("/dashboard")}>
                 Log In
               </button>
             </form>

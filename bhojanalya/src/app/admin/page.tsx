@@ -1,7 +1,6 @@
-export default function LandingPage() {
-  return (
-    <main>
-      <h1>Landing Page</h1>
-    </main>
-  );
+import { redirect } from 'next/navigation';
+
+export default function AdminRoot() {
+  // Automatically send admin to the approvals page
+  redirect('/admin/approvals');
 }

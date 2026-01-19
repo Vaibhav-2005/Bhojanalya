@@ -1,7 +1,7 @@
-export default function LandingPage() {
+export default function AdminLayout() {
   return (
     <main>
-      <h1>Landing Page</h1>
+      <h1>Admin Layout</h1>
     </main>
   );
 }
