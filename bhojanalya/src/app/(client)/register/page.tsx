@@ -1,16 +1,15 @@
-// app/register-restaurant/page.tsx
+// app/register/page.tsx
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   Utensils, MapPin, Phone, Clock, FileText, 
   ChevronRight, ChevronLeft, User, Image as ImageIcon, 
-  AlertCircle
+  AlertCircle, UploadCloud, Menu as MenuIcon, CheckCircle2, X
 } from "lucide-react";
 import { Inter } from "next/font/google";
 
-// Using Inter font for a clean, elegant look
 const inter = Inter({ subsets: ["latin"] });
 
 export default function RegisterRestaurant() {
@@ -18,18 +17,32 @@ export default function RegisterRestaurant() {
   const totalSteps = 6;
   const [errors, setErrors] = useState<{[key: string]: string}>({});
 
-  const [formData, setFormData] = useState({
+  // Refs for file inputs
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const menuInputRef = useRef<HTMLInputElement>(null);
+
+  // Form State
+  const [formData, setFormData] = useState<{
+    restaurantName: string; cuisine: string;
+    ownerName: string; email: string; phone: string;
+    address: string; city: string; zip: string;
+    gstin: string; fssai: string;
+    openTime: string; closeTime: string;
+    restaurantImages: FileList | null; 
+    menuFile: File | null;
+  }>({
     restaurantName: "", cuisine: "",
     ownerName: "", email: "", phone: "",
     address: "", city: "", zip: "",
     gstin: "", fssai: "",
     openTime: "", closeTime: "",
+    restaurantImages: null,
+    menuFile: null,
   });
 
   // --- Validation Logic ---
   const validateStep = (currentStep: number) => {
     let newErrors: {[key: string]: string} = {};
-    let isValid = true;
 
     if (currentStep === 1) {
       if (!formData.restaurantName) newErrors.restaurantName = "Restaurant name is required";
@@ -43,10 +56,19 @@ export default function RegisterRestaurant() {
     }
 
     if (currentStep === 4) {
-      // GST Regex: 2 digits, 5 letters, 4 digits, 1 letter, 1 number/letter, Z, 1 number/letter
       const gstRegex = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
       if (formData.gstin && !gstRegex.test(formData.gstin)) {
         newErrors.gstin = "Invalid GSTIN format";
+      }
+    }
+
+    // Step 6 Validation (Mandatory Files)
+    if (currentStep === 6) {
+      if (!formData.restaurantImages || formData.restaurantImages.length === 0) {
+        newErrors.restaurantImages = "At least one restaurant photo is required";
+      }
+      if (!formData.menuFile) {
+        newErrors.menuFile = "Restaurant menu file is required";
       }
     }
 
@@ -57,7 +79,13 @@ export default function RegisterRestaurant() {
   const handleNext = (e: React.FormEvent) => {
     e.preventDefault();
     if (validateStep(step)) {
-      if (step < totalSteps) setStep(step + 1);
+      if (step < totalSteps) {
+        setStep(step + 1);
+      } else {
+        // Submit Logic
+        console.log("Form Submitted", formData);
+        alert("Registration Submitted Successfully!");
+      }
     }
   };
 
@@ -65,26 +93,38 @@ export default function RegisterRestaurant() {
     if (step > 1) setStep(step - 1);
   };
 
-  // Generic Change Handler
   const handleChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
-    // Clear error when user types
     if (errors[field]) setErrors(prev => ({ ...prev, [field]: "" }));
   };
 
-  // Specific Phone Handler (Numbers Only)
   const handlePhoneInput = (value: string) => {
     const numbersOnly = value.replace(/[^0-9]/g, "");
-    if (numbersOnly.length <= 10) {
-      handleChange("phone", numbersOnly);
+    if (numbersOnly.length <= 10) handleChange("phone", numbersOnly);
+  };
+
+  // --- File Handlers ---
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      setFormData(prev => ({ ...prev, restaurantImages: e.target.files }));
+      if (errors.restaurantImages) setErrors(prev => ({ ...prev, restaurantImages: "" }));
     }
   };
+
+  const handleMenuUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setFormData(prev => ({ ...prev, menuFile: e.target.files![0] }));
+      if (errors.menuFile) setErrors(prev => ({ ...prev, menuFile: "" }));
+    }
+  };
+
+  const triggerImageInput = () => imageInputRef.current?.click();
+  const triggerMenuInput = () => menuInputRef.current?.click();
 
   return (
     <div className={`min-h-screen bg-slate-50 pb-20 ${inter.className}`}>
       
-      {/* --- Header Area --- */}
-      {/* Increased padding-bottom (pb-48) to make the purple area longer */}
+      {/* Header Area */}
       <div className="bg-[#2E0561] pt-32 pb-48 px-6 text-center text-white relative">
         <h1 className="text-4xl md:text-5xl font-bold mb-4 tracking-tight">Register Your Restaurant</h1>
         <p className="text-purple-200 max-w-lg mx-auto text-lg mb-8">
@@ -105,8 +145,7 @@ export default function RegisterRestaurant() {
         </div>
       </div>
 
-      {/* --- Form Card --- */}
-      {/* Increased negative margin (-mt-32) for significant overlap */}
+      {/* Form Card */}
       <motion.div 
         initial={{ y: 20, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
@@ -123,11 +162,11 @@ export default function RegisterRestaurant() {
               transition={{ duration: 0.2 }}
               className="flex-grow"
             >
-              {/* Step Content Rendering */}
+              {/* Step 1: General Info */}
               {step === 1 && (
                 <div className="space-y-8">
                   <StepHeader title="General Information" subtitle="Tell us about your establishment" icon={<Utensils />} />
-                  <div className="grid grid-cols-1 md:grid-cols-1 gap-8">
+                  <div className="grid grid-cols-1 gap-8">
                     <Input 
                       label="Restaurant Name" 
                       value={formData.restaurantName}
@@ -135,7 +174,6 @@ export default function RegisterRestaurant() {
                       error={errors.restaurantName}
                       placeholder="e.g. Royal Spice" 
                     />
-                    <br />
                     <Input 
                       label="Cuisine Type" 
                       value={formData.cuisine}
@@ -147,6 +185,7 @@ export default function RegisterRestaurant() {
                 </div>
               )}
 
+              {/* Step 2: Owner Details */}
               {step === 2 && (
                 <div className="space-y-8">
                   <StepHeader title="Owner Details" subtitle="Who is the primary contact?" icon={<User />} />
@@ -176,6 +215,7 @@ export default function RegisterRestaurant() {
                 </div>
               )}
 
+              {/* Step 3: Location */}
               {step === 3 && (
                 <div className="space-y-8">
                   <StepHeader title="Location" subtitle="Where can customers find you?" icon={<MapPin />} />
@@ -202,6 +242,7 @@ export default function RegisterRestaurant() {
                 </div>
               )}
 
+              {/* Step 4: Legal */}
               {step === 4 && (
                 <div className="space-y-8">
                   <StepHeader title="Legal Documents" subtitle="Compliance information" icon={<FileText />} />
@@ -223,6 +264,7 @@ export default function RegisterRestaurant() {
                 </div>
               )}
 
+              {/* Step 5: Timings */}
               {step === 5 && (
                 <div className="space-y-8">
                   <StepHeader title="Timings" subtitle="When are you open?" icon={<Clock />} />
@@ -233,15 +275,102 @@ export default function RegisterRestaurant() {
                 </div>
               )}
 
+              {/* Step 6: Branding & Menu (UPDATED) */}
               {step === 6 && (
                 <div className="space-y-8">
-                  <StepHeader title="Branding" subtitle="Upload your logo" icon={<ImageIcon />} />
-                   <div className="border-2 border-dashed border-slate-200 rounded-2xl p-10 text-center hover:border-purple-500 hover:bg-purple-50 transition-colors cursor-pointer">
-                    <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center mx-auto mb-4 shadow-sm border border-slate-100">
-                      <ImageIcon className="w-6 h-6 text-purple-600" />
+                  <StepHeader title="Photos & Menu" subtitle="Showcase your restaurant" icon={<ImageIcon />} />
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    
+                    {/* 1. Restaurant Images Upload */}
+                    <div 
+                      onClick={triggerImageInput}
+                      className={`
+                        border-2 border-dashed rounded-2xl p-8 text-center transition-all cursor-pointer group flex flex-col items-center justify-center min-h-[240px] relative
+                        ${errors.restaurantImages ? "border-red-300 bg-red-50 hover:bg-red-50" : ""}
+                        ${formData.restaurantImages ? "border-green-300 bg-green-50 hover:bg-green-100" : "border-slate-200 hover:border-purple-500 hover:bg-purple-50"}
+                      `}
+                    >
+                      <input 
+                        type="file" 
+                        ref={imageInputRef} 
+                        onChange={handleImageUpload} 
+                        multiple 
+                        accept="image/*"
+                        className="hidden" 
+                      />
+                      
+                      <div className={`w-14 h-14 rounded-full flex items-center justify-center mb-4 shadow-sm border transition-transform group-hover:scale-110 ${formData.restaurantImages ? "bg-green-100 border-green-200" : "bg-white border-slate-100"}`}>
+                        {formData.restaurantImages ? <CheckCircle2 className="w-7 h-7 text-green-600" /> : <ImageIcon className="w-7 h-7 text-purple-600" />}
+                      </div>
+                      
+                      {formData.restaurantImages ? (
+                        <>
+                          <span className="text-green-800 font-bold text-lg">Photos Selected</span>
+                          <p className="text-xs text-green-600 mt-2">{formData.restaurantImages.length} file(s) ready to upload</p>
+                          <button type="button" className="mt-6 text-xs font-bold text-green-700 bg-white border border-green-200 px-4 py-2 rounded-full">Change Photos</button>
+                        </>
+                      ) : (
+                        <>
+                          <span className="text-slate-700 font-bold text-lg">Restaurant Photos</span>
+                          <p className="text-xs text-slate-400 mt-2 px-4 leading-relaxed">Upload shots of interior, exterior, or your best dishes.</p>
+                          <span className="mt-6 text-xs font-bold text-purple-700 bg-purple-100 px-4 py-2 rounded-full group-hover:bg-purple-200 transition-colors">Browse Gallery</span>
+                        </>
+                      )}
+
+                      {/* Error Message */}
+                      {errors.restaurantImages && (
+                        <div className="absolute bottom-4 flex items-center gap-1 text-red-500">
+                          <AlertCircle className="w-3 h-3" />
+                          <span className="text-xs font-bold">{errors.restaurantImages}</span>
+                        </div>
+                      )}
                     </div>
-                    <span className="text-slate-600 font-medium">Click to upload logo</span>
-                    <p className="text-sm text-slate-400 mt-2">Maximum file size 5MB</p>
+
+                    {/* 2. Menu Card Upload */}
+                    <div 
+                      onClick={triggerMenuInput}
+                      className={`
+                        border-2 border-dashed rounded-2xl p-8 text-center transition-all cursor-pointer group flex flex-col items-center justify-center min-h-[240px] relative
+                        ${errors.menuFile ? "border-red-300 bg-red-50 hover:bg-red-50" : ""}
+                        ${formData.menuFile ? "border-green-300 bg-green-50 hover:bg-green-100" : "border-slate-200 hover:border-[#FFCC00] hover:bg-yellow-50"}
+                      `}
+                    >
+                      <input 
+                        type="file" 
+                        ref={menuInputRef} 
+                        onChange={handleMenuUpload} 
+                        accept=".pdf,.jpg,.jpeg,.png"
+                        className="hidden" 
+                      />
+
+                      <div className={`w-14 h-14 rounded-full flex items-center justify-center mb-4 shadow-sm border transition-transform group-hover:scale-110 ${formData.menuFile ? "bg-green-100 border-green-200" : "bg-white border-slate-100"}`}>
+                        {formData.menuFile ? <CheckCircle2 className="w-7 h-7 text-green-600" /> : <MenuIcon className="w-7 h-7 text-[#FFCC00]" />}
+                      </div>
+
+                      {formData.menuFile ? (
+                        <>
+                          <span className="text-green-800 font-bold text-lg">Menu Attached</span>
+                          <p className="text-xs text-green-600 mt-2 truncate max-w-[200px]">{formData.menuFile.name}</p>
+                          <button type="button" className="mt-6 text-xs font-bold text-green-700 bg-white border border-green-200 px-4 py-2 rounded-full">Change File</button>
+                        </>
+                      ) : (
+                        <>
+                          <span className="text-slate-700 font-bold text-lg">Restaurant Menu</span>
+                          <p className="text-xs text-slate-400 mt-2 px-4 leading-relaxed">Upload your full menu. Supported formats: PDF, JPG, PNG.</p>
+                          <span className="mt-6 text-xs font-bold text-yellow-700 bg-yellow-100 px-4 py-2 rounded-full group-hover:bg-yellow-200 transition-colors">Browse Files</span>
+                        </>
+                      )}
+
+                       {/* Error Message */}
+                       {errors.menuFile && (
+                        <div className="absolute bottom-4 flex items-center gap-1 text-red-500">
+                          <AlertCircle className="w-3 h-3" />
+                          <span className="text-xs font-bold">{errors.menuFile}</span>
+                        </div>
+                      )}
+                    </div>
+
                   </div>
                 </div>
               )}
@@ -249,7 +378,7 @@ export default function RegisterRestaurant() {
             </motion.div>
           </AnimatePresence>
 
-          {/* --- Footer / Navigation Buttons --- */}
+          {/* --- Navigation Buttons --- */}
           <div className="mt-12 pt-8 border-t border-slate-100 flex items-center justify-between">
             {step > 1 ? (
               <button 
