@@ -12,14 +12,12 @@ export default function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // 1. Route Logic
-  if (pathname === "/" || pathname === "/auth" || pathname?.includes("/preview")) {
-    return null;
-  }
+  // --- MOVED DOWN: Determine visibility but DO NOT return yet ---
+  // We just store the boolean to use later.
+  const isHidden = pathname === "/" || pathname === "/auth" || pathname?.includes("/preview");
 
   const isAdmin = pathname?.startsWith("/admin");
   
-  // 2. User Data
   const userData = isAdmin ? {
     name: "Admin",
     role: "Super User",
@@ -34,6 +32,7 @@ export default function Navbar() {
     bgClass: "bg-[#FFCC00] text-[#471396]"
   };
 
+  // --- CRITICAL FIX: useEffect is now ALWAYS called, regardless of route ---
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) setIsOpen(false);
@@ -41,6 +40,11 @@ export default function Navbar() {
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
+
+  // --- NOW we can safely return null if hidden ---
+  if (isHidden) {
+    return null;
+  }
 
   return (
     <nav className="w-full bg-[#2e0561] border-b border-white/5 sticky top-0 z-[100] shadow-lg shadow-purple-900/20">
