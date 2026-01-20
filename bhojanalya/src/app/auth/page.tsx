@@ -96,7 +96,7 @@ export default function AuthPage() {
                 </div>
               </div>
 
-              <button className="w-full py-4 bg-[#FFCC00] text-[#471396] rounded-xl font-bold text-sm shadow-lg shadow-yellow-500/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2">
+              <button className="w-full py-4 bg-[#FFCC00] text-[#471396] rounded-xl font-bold text-sm shadow-lg shadow-yellow-500/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2" onClick={() => router.push("/admin")}>
                 Sign Up<ArrowRight className="w-4 h-4" />
               </button>
             </form>

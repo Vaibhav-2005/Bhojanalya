@@ -125,7 +125,7 @@ export default function RegisterRestaurant() {
     <div className={`min-h-screen bg-slate-50 pb-20 ${inter.className}`}>
       
       {/* Header Area */}
-      <div className="bg-[#2E0561] pt-32 pb-48 px-6 text-center text-white relative">
+      <div className="bg-[#471396] pt-32 pb-48 px-6 text-center text-white relative">
         <h1 className="text-4xl md:text-5xl font-bold mb-4 tracking-tight">Register Your Restaurant</h1>
         <p className="text-purple-200 max-w-lg mx-auto text-lg mb-8">
           Join the Bhojanalya network. Let's get you set up in minutes.

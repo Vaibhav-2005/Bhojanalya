@@ -1,20 +1,25 @@
-"use client";
+import type { Metadata } from "next";
+import { Inter } from "next/font/google";
+import Navbar from "@/components/layout/Navbar"; // The Smart Navbar
+import "./globals.css";
 
-import "../app/globals.css";
-import Navbar from "../components/layout/Navbar";
-import { usePathname } from "next/navigation";
+const inter = Inter({ subsets: ["latin"] });
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname();
-  
-  // Hide navbar on Landing and Auth pages
-  const hideNavbar = pathname === "/" || pathname === "/auth";
+export const metadata: Metadata = {
+  title: "Bhojanalya",
+  description: "Restaurant Management System",
+};
 
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
     <html lang="en">
-      <body className="bg-white text-gray-900 antialiased">
-        {!hideNavbar && <Navbar />}
-        <main>{children}</main>
+      <body className={inter.className}>
+        <Navbar />
+        {children}
       </body>
     </html>
   );

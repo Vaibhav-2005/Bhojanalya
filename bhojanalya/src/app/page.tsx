@@ -5,22 +5,23 @@ import { useRouter } from "next/navigation";
 import { motion, useScroll, useTransform } from "framer-motion";
 import Logo from "../../public/bhojnalaya-text.png";
 import {
-  BarChart3,
-  Utensils,
-  ChevronDown,
   Zap,
   Globe,
   PieChart,
-  Users
+  Users,
+  ChevronDown
 } from "lucide-react";
 
 export default function LandingPage() {
   const router = useRouter();
   const { scrollY } = useScroll();
 
-  // --- LOGO & UI ANIMATION LOGIC ---
+  // --- LOGO SCROLL LOGIC ---
   const logoScale = useTransform(scrollY, [0, 300], [2.5, 0.45]);
-  const logoY = useTransform(scrollY, [0, 300], ["0vh", "-45vh"]);
+  const logoTop = useTransform(scrollY, [0, 300], ["22%", "2.5rem"]);
+  const logoLeft = useTransform(scrollY, [0, 300], ["44%", "9rem"]);
+
+  // --- UI SCROLL LOGIC ---
   const heroContentOpacity = useTransform(scrollY, [0, 150], [1, 0]);
   const cornerScale = useTransform(scrollY, [0, 200], [1, 1.15]);
   const navBgOpacity = useTransform(scrollY, [250, 300], [0, 1]);
@@ -39,7 +40,6 @@ export default function LandingPage() {
       >
         <div className="w-24 hidden md:block" />
         <div className="flex-1" />
-        {/* Styled Navbar Button: Glass effect with border */}
         <button
           onClick={() => router.push("/auth")}
           className="px-5 py-2 rounded-full bg-[#FFCC00] text-[#471396] font-bold hover:bg-white hover:shadow-[0_0_20px_rgba(255,204,0,0.4)] transition-all duration-300 text-sm pointer-events-auto border border-white/20"
@@ -52,57 +52,78 @@ export default function LandingPage() {
       <section className="relative h-screen w-full flex flex-col items-center justify-center bg-[#2e0561] overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-b from-[#2e0561] via-[#2e0561] to-[#1a033a] opacity-90" />
         
-        {/* --- YELLOW CORNERS (#FFCC00) --- */}
+        {/* --- YELLOW CORNERS --- */}
         <motion.div
           style={{ opacity: heroContentOpacity, scale: cornerScale }}
-          className="absolute inset-0 pointer-events-none p-6 md:p-16 z-10"
+          className="absolute inset-0 pointer-events-none z-10"
         >
-          <div className="absolute top-10 left-10 w-16 h-16 md:w-24 md:h-24 border-t-[8px] border-l-[8px] border-[#FFCC00]" />
-          <div className="absolute top-10 right-10 w-16 h-16 md:w-24 md:h-24 border-t-[8px] border-r-[8px] border-[#FFCC00]" />
-          <div className="absolute bottom-10 left-10 w-16 h-16 md:w-24 md:h-24 border-b-[8px] border-l-[8px] border-[#FFCC00]" />
-          <div className="absolute bottom-10 right-10 w-16 h-16 md:w-24 md:h-24 border-b-[8px] border-r-[8px] border-[#FFCC00]" />
+           <motion.div
+             initial={{ opacity: 0, scale: 0.9 }}
+             animate={{ opacity: 1, scale: 1 }}
+             transition={{ duration: 1, delay: 0.2, ease: "easeOut" }}
+             className="w-full h-full relative"
+           >
+              {/* UPDATED: top-3 (12px) provides a balanced 'frame' look without touching the edge */}
+              <div className="absolute top-10 left-10 w-16 h-16 md:w-24 md:h-24 border-t-[8px] border-l-[8px] border-[#FFCC00]" />
+              <div className="absolute top-10 right-10 w-16 h-16 md:w-24 md:h-24 border-t-[8px] border-r-[8px] border-[#FFCC00]" />
+              <div className="absolute bottom-10 left-10 w-16 h-16 md:w-24 md:h-24 border-b-[8px] border-l-[8px] border-[#FFCC00]" />
+              <div className="absolute bottom-10 right-10 w-16 h-16 md:w-24 md:h-24 border-b-[8px] border-r-[8px] border-[#FFCC00]" />
+           </motion.div>
         </motion.div>
 
-        {/* LOGO: Elegantly Rising to Center */}
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+        {/* --- LOGO CONTAINER --- */}
+        <div className="absolute inset-0 pointer-events-none z-[110]">
           <motion.div
-            style={{ scale: logoScale, y: logoY, position: "fixed", zIndex: 110, left: "50%", translateX: "-50%" }}
-            initial={{ opacity: 0, y: 100 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 1.4, ease: [0.22, 1, 0.36, 1], delay: 0.2 }}
+            style={{ 
+              scale: logoScale,
+              top: logoTop,
+              left: logoLeft,
+              x: "-50%", 
+              y: "-50%", 
+              position: "fixed",
+            }}
             className="pointer-events-auto cursor-pointer"
             onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
           >
-            <Image src={Logo} alt="Bhojanalya Logo" priority className="w-64 md:w-96 h-auto" />
+            <motion.div
+               initial={{ opacity: 0, y: 100 }}
+               animate={{ opacity: 1, y: 0 }}
+               transition={{ duration: 1.2, ease: [0.22, 1, 0.36, 1] }}
+            >
+              <Image 
+                src={Logo} 
+                alt="Bhojanalya Logo" 
+                priority 
+                className="w-[24rem] h-auto" 
+              />
+            </motion.div>
           </motion.div>
         </div>
 
+        {/* --- TEXT CONTENT --- */}
         <motion.div
           style={{ opacity: heroContentOpacity }}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 1.2 }}
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.8, duration: 1 }}
           className="relative flex flex-col items-center mt-[450px] md:mt-[520px] text-center z-20 px-6"
         >
           <p className="text-white/70 text-sm md:text-lg max-w-xl mb-8 font-medium tracking-wide">
             The premium onboarding and management platform for organization and restaurant partners.
           </p>
-          
-          {/* Hero Button: Smaller (px-10 py-4) and more refined */}
           <button 
             onClick={() => router.push("/auth")} 
             className="px-10 py-4 rounded-full bg-[#FFCC00] text-[#2e0561] font-black uppercase tracking-[0.15em] hover:scale-105 active:scale-95 transition-all shadow-xl shadow-yellow-500/20 text-base"
           >
             Login / SignUp
           </button>
-
           <motion.div animate={{ y: [0, 15, 0] }} transition={{ repeat: Infinity, duration: 2.5 }} className="mt-16 opacity-30">
             <ChevronDown className="w-10 h-10 text-[#FFCC00]" />
           </motion.div>
         </motion.div>
       </section>
 
-      {/* --- ALTERNATING FEATURES SECTION --- */}
+      {/* --- FEATURES SECTION --- */}
       <section className="py-24 space-y-32 overflow-hidden bg-white">
         <FeatureRow 
           icon={<Globe className="w-8 h-8" />}
@@ -134,7 +155,6 @@ export default function LandingPage() {
         />
       </section>
 
-      {/* --- FINAL SMALL FOOTER --- */}
       <footer className="py-10 bg-white border-t border-gray-100 text-center">
         <p className="text-gray-400 text-xs font-bold tracking-[0.3em] uppercase">
           Bhojanalya © {new Date().getFullYear()}
