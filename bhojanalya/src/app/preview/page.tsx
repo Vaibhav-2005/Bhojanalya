@@ -1,11 +1,13 @@
 "use client";
 
+import { Suspense } from "react"; // 1. Import Suspense
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Loader2, AlertTriangle, X } from "lucide-react";
 import { apiRequest } from "@/lib/api";
 
-export default function PreviewShop() {
+// 2. Rename your main logic component (Internal use only)
+function PreviewContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   
@@ -62,7 +64,7 @@ export default function PreviewShop() {
     );
   }
 
-  // --- ERROR STATE (This will tell us the problem) ---
+  // --- ERROR STATE ---
   if (errorDetails || !data) {
     return (
       <div className="fixed inset-0 bg-slate-900 flex flex-col items-center justify-center text-white p-10">
@@ -93,8 +95,7 @@ export default function PreviewShop() {
     );
   }
 
-  // --- SUCCESS STATE (Render the App) ---
-  // Using a helper to safely grab keys whether Uppercase or Lowercase
+  // --- SUCCESS STATE ---
   const safeData = {
     name: data.Name || data.name || "Unknown Name",
     city: data.City || data.city || "Unknown City",
@@ -135,3 +136,16 @@ export default function PreviewShop() {
     </div>
   );
 } 
+
+// 3. Create the Default Export (Wrapper)
+export default function PreviewShop() {
+  return (
+    <Suspense fallback={
+      <div className="fixed inset-0 bg-slate-900 flex items-center justify-center text-white">
+        <Loader2 className="w-8 h-8 animate-spin" />
+      </div>
+    }>
+      <PreviewContent />
+    </Suspense>
+  );
+}
