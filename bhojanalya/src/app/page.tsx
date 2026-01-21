@@ -19,7 +19,10 @@ export default function LandingPage() {
   // --- LOGO SCROLL LOGIC ---
   const logoScale = useTransform(scrollY, [0, 300], [2.5, 0.45]);
   const logoTop = useTransform(scrollY, [0, 300], ["22%", "2.5rem"]);
-  const logoLeft = useTransform(scrollY, [0, 300], ["44%", "9rem"]);
+  
+  // FIX: Starting at 50% ensures it's dead center. 
+  // Moving to a percentage (e.g., 10%) ensures it stays responsive in the nav.
+  const logoLeft = useTransform(scrollY, [0, 300], ["50%", "10%"]);
 
   // --- UI SCROLL LOGIC ---
   const heroContentOpacity = useTransform(scrollY, [0, 150], [1, 0]);
@@ -63,7 +66,6 @@ export default function LandingPage() {
              transition={{ duration: 1, delay: 0.2, ease: "easeOut" }}
              className="w-full h-full relative"
            >
-              {/* UPDATED: top-3 (12px) provides a balanced 'frame' look without touching the edge */}
               <div className="absolute top-10 left-10 w-16 h-16 md:w-24 md:h-24 border-t-[8px] border-l-[8px] border-[#FFCC00]" />
               <div className="absolute top-10 right-10 w-16 h-16 md:w-24 md:h-24 border-t-[8px] border-r-[8px] border-[#FFCC00]" />
               <div className="absolute bottom-10 left-10 w-16 h-16 md:w-24 md:h-24 border-b-[8px] border-l-[8px] border-[#FFCC00]" />
@@ -78,7 +80,7 @@ export default function LandingPage() {
               scale: logoScale,
               top: logoTop,
               left: logoLeft,
-              x: "-50%", 
+              x: "-50%", // Anchor point is center
               y: "-50%", 
               position: "fixed",
             }}
@@ -164,7 +166,6 @@ export default function LandingPage() {
   );
 }
 
-// --- SUB-COMPONENTS ---
 function FeatureRow({ icon, title, desc, imageBg, reverse }: any) {
   return (
     <div className="max-w-7xl mx-auto px-6 grid grid-cols-1 md:grid-cols-2 gap-16 items-center">
