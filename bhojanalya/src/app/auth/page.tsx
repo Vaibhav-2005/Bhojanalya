@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { ArrowLeft, Mail, Lock, User, ShieldCheck, ArrowRight, AlertTriangle } from "lucide-react"; // Added AlertTriangle
+import { ArrowLeft, Mail, Lock, User, ShieldCheck, ArrowRight, AlertTriangle } from "lucide-react";
 import Image from "next/image";
 import Logo from "../../../public/bhojnalaya-text.png";
 import { apiRequest } from "@/lib/api";
@@ -11,7 +11,7 @@ import { apiRequest } from "@/lib/api";
 export default function AuthPage() {
   const router = useRouter();
   const [isLogin, setIsLogin] = useState(true);
-  const [error, setError] = useState<string | null>(null); // ✅ Error State
+  const [error, setError] = useState<string | null>(null);
 
   const [formData, setFormData] = useState({
     name: "",
@@ -21,7 +21,7 @@ export default function AuthPage() {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
-    setError(null); // Clear error when typing
+    setError(null);
   };
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -32,10 +32,37 @@ export default function AuthPage() {
         email: formData.email,
         password: formData.password
       });
-      localStorage.setItem('token', data.token);
-      router.push("/dashboard"); 
+
+      // 1. Store Token
+      const token = data.token;
+      if (!token) throw new Error("No token received from server");
+      localStorage.setItem('token', token);
+
+      // 2. Decode Token
+      // We manually decode the JWT payload to find the "role"
+      const base64Url = token.split('.')[1];
+      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+      const jsonPayload = decodeURIComponent(window.atob(base64).split('').map(function(c) {
+          return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+      }).join(''));
+
+      const decodedToken = JSON.parse(jsonPayload);
+      
+      // 🔍 DEBUG: Check what the role actually is
+      console.log("User Role:", decodedToken.role); 
+
+      // 3. Route Based on Exact Database Roles
+      // We normalize to uppercase just to be safe, but check for "ADMIN" specifically.
+      const role = (decodedToken.role || "").toUpperCase();
+
+      if (role === "ADMIN") {
+        router.push("/admin");
+      } else {
+        // "RESTAURANT" or any other role goes to the dashboard
+        router.push("/dashboard");
+      }
+
     } catch (err: any) {
-      // ✅ Set inline error instead of alert
       setError(err.message || "Invalid credentials. Please try again.");
     }
   };
@@ -49,11 +76,10 @@ export default function AuthPage() {
         email: formData.email,
         password: formData.password
       });
-      setIsLogin(true);
+      setIsLogin(true); // Switch to login view on success
       setError(null);
-      // Optional: Success message or just switch tabs
+      // Ideally show a success toast here
     } catch (err: any) {
-      // ✅ Set inline error
       setError(err.message || "Registration failed. Try a different email.");
     }
   };
@@ -80,7 +106,6 @@ export default function AuthPage() {
             <p className="text-gray-400 mb-8 text-sm font-medium text-center">Access your partner account.</p>
             
             <form className="space-y-5" onSubmit={handleLogin}>
-              {/* ✅ INLINE ERROR WARNING (Login) */}
               {error && isLogin && (
                 <div className="flex items-center gap-2 bg-red-50 text-red-600 px-4 py-3 rounded-xl text-xs font-bold border border-red-100 animate-in slide-in-from-top-2">
                   <AlertTriangle className="w-4 h-4 shrink-0" />
@@ -118,7 +143,6 @@ export default function AuthPage() {
             <p className="text-gray-400 mb-8 text-sm font-medium text-center">Step 1: Set up your credentials.</p>
             
             <form className="space-y-4" onSubmit={handleRegister}>
-              {/* ✅ INLINE ERROR WARNING (Signup) */}
               {error && !isLogin && (
                 <div className="flex items-center gap-2 bg-red-50 text-red-600 px-4 py-3 rounded-xl text-xs font-bold border border-red-100 animate-in slide-in-from-top-2">
                   <AlertTriangle className="w-4 h-4 shrink-0" />
