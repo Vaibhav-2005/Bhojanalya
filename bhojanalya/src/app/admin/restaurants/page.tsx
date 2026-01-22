@@ -14,7 +14,7 @@ export default function RestaurantDirectory() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
 
-  // 🔒 SECURITY GUARD & DATA FETCH 🔒
+  // SECURITY GUARD & DATA FETCH
   useEffect(() => {
     const token = localStorage.getItem('token');
 
