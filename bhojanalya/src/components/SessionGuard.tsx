@@ -1,38 +1,36 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation"; // 👈 Import this
 import { AlertOctagon } from "lucide-react";
 
 export default function SessionGuard() {
+  const pathname = usePathname(); // 👈 Get current URL
   const [isDuplicate, setIsDuplicate] = useState(false);
 
   useEffect(() => {
-    // Unique channel name for the whole app
+    // 🛑 EXCEPTION: Allow Preview page to open in new tab
+    if (pathname?.startsWith("/preview")) return; 
+
     const channel = new BroadcastChannel('bhojanalya_global_session');
     
-    // 1. Listen for messages from other tabs
     channel.onmessage = (event) => {
-      // If a new tab opens and asks "Is anyone there?", we answer "Yes"
       if (event.data === 'CHECK_EXISTING') {
         channel.postMessage('I_EXIST');
       } 
-      // If we receive "I_EXIST", it means another tab responded, so WE are the duplicate
       else if (event.data === 'I_EXIST') {
         setIsDuplicate(true);
       }
     };
 
-    // 2. Ask "Is anyone there?" as soon as this component mounts
     channel.postMessage('CHECK_EXISTING');
 
-    // Cleanup when closing tab
     return () => channel.close();
-  }, []);
+  }, [pathname]);
 
-  // If no duplicate found, render nothing (invisible)
-  if (!isDuplicate) return null;
+  // If on preview page OR no duplicate found, render nothing
+  if (pathname?.startsWith("/preview") || !isDuplicate) return null;
 
-  // If duplicate, BLOCK the screen
   return (
     <div className="fixed inset-0 z-[9999] bg-slate-50 flex flex-col items-center justify-center p-6 text-center font-sans backdrop-blur-sm">
       <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mb-6 animate-pulse">
@@ -40,8 +38,8 @@ export default function SessionGuard() {
       </div>
       <h1 className="text-3xl font-black text-[#2e0561] mb-3">Session Active Elsewhere</h1>
       <p className="text-slate-500 max-w-md mb-8 leading-relaxed font-medium">
-        Bhojanalya is already open in another tab or window. <br/>
-        To prevent data conflicts, please use the existing tab or close it to continue here.
+        Bhojanalya is already open in another tab. <br/>
+        Please close this tab or use the existing one.
       </p>
       <button 
         onClick={() => window.location.reload()} 

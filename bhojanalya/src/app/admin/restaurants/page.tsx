@@ -1,26 +1,92 @@
 "use client";
 
-import { useState } from "react";
-import { Search, MapPin, MoreHorizontal, Filter, Smartphone } from "lucide-react";
-
-// Mock Restaurants Data
-const RESTAURANTS = [
-  { id: 1, name: "Royal Spice Bistro", location: "Gurugram, Sector 29", owner: "Rajesh Kumar", status: "Active", rating: 4.8 },
-  { id: 2, name: "Pizza Haven", location: "Delhi, CP", owner: "Amit Singh", status: "Active", rating: 4.5 },
-  { id: 3, name: "Burger Point", location: "Noida, Sector 18", owner: "Sneha Gupta", status: "Pending", rating: 0.0 },
-  { id: 4, name: "The Curry House", location: "Gurugram, DLF", owner: "Vikram Malhotra", status: "Suspended", rating: 3.9 },
-  { id: 5, name: "Tandoori Nights", location: "Chandigarh, Sector 17", owner: "Priya Sharma", status: "Active", rating: 4.7 },
-];
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { 
+  Search, MapPin, MoreHorizontal, Filter, 
+  Smartphone, Loader2, AlertCircle 
+} from "lucide-react";
 
 export default function RestaurantDirectory() {
+  const router = useRouter();
+  
+  const [restaurants, setRestaurants] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
 
-  const filtered = RESTAURANTS.filter(r => 
-    r.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    r.location.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // 🔒 SECURITY GUARD & DATA FETCH 🔒
+  useEffect(() => {
+    const token = localStorage.getItem('token');
 
-  const openPreview = () => window.open("/preview", "_blank");
+    // 1. Check Token Existence
+    if (!token) {
+      router.push('/auth');
+      return;
+    }
+
+    try {
+      // 2. Decode & Verify Role
+      const base64Url = token.split('.')[1];
+      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+      const jsonPayload = decodeURIComponent(window.atob(base64).split('').map(function(c) {
+          return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+      }).join(''));
+
+      const decodedToken = JSON.parse(jsonPayload);
+      const role = (decodedToken.role || "").toUpperCase();
+
+      if (role !== "ADMIN") {
+        console.warn("Unauthorized Access: User is not Admin");
+        router.push('/dashboard'); // Kick to client dashboard
+        return;
+      }
+
+      // 3. Fetch Data (Using our Next.js API Bypass)
+      const fetchData = async () => {
+        try {
+          // Calls the Postgres DB directly via Next.js API
+          const response = await fetch('/api/admin/restaurants');
+          if (!response.ok) throw new Error("Failed to fetch");
+          const data = await response.json();
+          setRestaurants(data || []);
+        } catch (err) {
+          console.error("Failed to load directory", err);
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      fetchData();
+
+    } catch (e) {
+      localStorage.removeItem('token');
+      router.push('/auth');
+    }
+  }, [router]);
+
+  // Filter Logic
+  const filtered = restaurants.filter(r => {
+    // Handle Postgres lowercase keys (id, name, city)
+    const name = (r.name || r.Name || "").toLowerCase();
+    const location = (r.city || r.City || "").toLowerCase();
+    const search = searchTerm.toLowerCase();
+    return name.includes(search) || location.includes(search);
+  });
+
+  const openPreview = (id: string | number) => {
+    window.open(`/preview?id=${id}`, "_blank");
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#F8F9FB]">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="w-8 h-8 animate-spin text-[#471396]" />
+          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Verifying Admin Access...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#F8F9FB] font-sans pb-20">
@@ -59,36 +125,43 @@ export default function RestaurantDirectory() {
               <tr>
                 <th className="px-6 py-4">Restaurant Name</th>
                 <th className="px-6 py-4">Location</th>
-                <th className="px-6 py-4">Owner</th>
+                <th className="px-6 py-4">Owner ID</th>
                 <th className="px-6 py-4">Status</th>
                 <th className="px-6 py-4 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filtered.map((r) => (
-                <tr key={r.id} className="hover:bg-slate-50/50 transition-colors group">
+                <tr key={r.id || r.ID} className="hover:bg-slate-50/50 transition-colors group">
                   <td className="px-6 py-4">
-                    <div className="font-bold text-slate-900">{r.name}</div>
-                    <div className="text-xs text-slate-400 font-medium">ID: #{r.id.toString().padStart(4, '0')}</div>
+                    <div className="font-bold text-slate-900">{r.name || r.Name}</div>
+                    <div className="text-xs text-slate-400 font-medium font-mono">ID: {r.id || r.ID}</div>
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-1.5 text-slate-600 text-sm">
-                      <MapPin size={14} className="text-slate-300" /> {r.location}
+                      <MapPin size={14} className="text-slate-300" /> {r.city || r.City || "Unknown"}
                     </div>
                   </td>
-                  <td className="px-6 py-4 text-sm font-medium text-slate-700">{r.owner}</td>
+                  <td className="px-6 py-4 text-sm font-medium text-slate-700 font-mono text-xs">
+                    {(r.owner_id || r.OwnerID || "N/A").substring(0, 8)}...
+                  </td>
                   <td className="px-6 py-4">
-                    <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide ${
-                      r.status === 'Active' ? 'bg-green-100 text-green-700' :
-                      r.status === 'Pending' ? 'bg-orange-100 text-orange-700' : 'bg-red-100 text-red-700'
-                    }`}>
-                      {r.status}
-                    </span>
+                    {(() => {
+                      const status = (r.status || r.Status || "Unknown").toLowerCase();
+                      return (
+                        <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide ${
+                          status === 'active' ? 'bg-green-100 text-green-700' :
+                          status === 'pending' ? 'bg-orange-100 text-orange-700' : 'bg-red-100 text-red-700'
+                        }`}>
+                          {status}
+                        </span>
+                      );
+                    })()}
                   </td>
                   <td className="px-6 py-4 text-right">
                     <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                       <button 
-                        onClick={openPreview}
+                        onClick={() => openPreview(r.id || r.ID)}
                         className="p-2 text-slate-400 hover:text-[#2e0561] hover:bg-purple-50 rounded-lg transition-colors" 
                         title="Preview Mobile App"
                       >
@@ -105,7 +178,10 @@ export default function RestaurantDirectory() {
           </table>
           
           {filtered.length === 0 && (
-            <div className="p-12 text-center text-slate-400 text-sm">No restaurants found matching your search.</div>
+            <div className="p-12 text-center text-slate-400 text-sm flex flex-col items-center gap-2">
+              <AlertCircle size={24} className="opacity-50" />
+              <span>No restaurants found matching your search.</span>
+            </div>
           )}
         </div>
       </div>
