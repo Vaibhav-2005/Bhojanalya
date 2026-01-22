@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import Image from "next/image";
 import { useRouter, usePathname } from "next/navigation";
-import LogoImg from "../../../public/bhojnalaya-text.png"; 
+import LogoImg from "../../public/bhojnalaya-text.png"; 
 import { LogOut, ChevronDown, LayoutDashboard, Store, Settings, Lock } from "lucide-react";
 import { apiRequest } from "@/lib/api"; 
 
@@ -19,7 +19,6 @@ export default function Navbar() {
   const isHidden = pathname === "/" || pathname === "/auth" || pathname?.includes("/preview");
   const isAdmin = pathname?.startsWith("/admin");
 
-  // ✅ FIX: Relaxed Check. If we have a user object, they are registered.
   // We removed the specific 'user.isRegistered === true' check because your API might not be sending it.
   const isRegistered = !loading && !!user; 
 

@@ -14,7 +14,7 @@ export default function AuthPage() {
   // States
   const [isLogin, setIsLogin] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [checkingSession, setCheckingSession] = useState(true); // ✅ New Loading State
+  const [checkingSession, setCheckingSession] = useState(true);
 
   const [formData, setFormData] = useState({
     name: "",
@@ -22,7 +22,8 @@ export default function AuthPage() {
     password: ""
   });
 
-  // 1. SESSION GUARD: Redirect if already logged in
+  // 1. AUTH GUARD: Redirect if already logged in
+  // (We don't need to check for duplicate tabs here, layout.tsx does that)
   useEffect(() => {
     const token = localStorage.getItem('token');
     
@@ -44,7 +45,6 @@ export default function AuthPage() {
         } else {
           router.replace("/dashboard");
         }
-        // Don't stop loading state, so UI doesn't flash
         return; 
 
       } catch (e) {
@@ -113,35 +113,36 @@ export default function AuthPage() {
     }
   };
 
-  // ✅ PREVENT FLASHING: Show loader while checking session
+  // Show loader while checking if user is already logged in
   if (checkingSession) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
         <Loader2 className="w-8 h-8 animate-spin text-[#471396]" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-6 relative overflow-hidden">
+    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 relative overflow-hidden">
       
+      {/* Background Decor */}
       <div className="absolute -top-[10%] -left-[10%] w-[40%] h-[40%] bg-[#471396]/10 blur-[120px] rounded-full pointer-events-none" />
       <div className="absolute -bottom-[10%] -right-[10%] w-[40%] h-[40%] bg-[#FFCC00]/10 blur-[120px] rounded-full pointer-events-none" />
 
       <button 
         onClick={() => router.push("/")}
-        className="absolute top-8 left-8 flex items-center gap-2 text-gray-400 hover:text-[#471396] transition-colors font-semibold text-sm z-50"
+        className="absolute top-8 left-8 flex items-center gap-2 text-slate-400 hover:text-[#471396] transition-colors font-semibold text-sm z-50"
       >
         <ArrowLeft className="w-4 h-4" /> Back to Home
       </button>
 
-      <div className="relative w-full max-w-[950px] min-h-[620px] bg-white rounded-[3rem] shadow-[0_32px_64px_-15px_rgba(0,0,0,0.1)] overflow-hidden flex border border-gray-100 z-10">
+      <div className="relative w-full max-w-[950px] min-h-[620px] bg-white rounded-[3rem] shadow-[0_32px_64px_-15px_rgba(0,0,0,0.1)] overflow-hidden flex border border-slate-100 z-10">
         
         {/* --- LOGIN SIDE --- */}
         <div className="w-1/2 p-12 flex flex-col justify-center">
           <div className="max-w-[320px] mx-auto w-full">
-            <h2 className="text-3xl font-black text-[#090040] mb-2 text-center">Login</h2>
-            <p className="text-gray-400 mb-8 text-sm font-medium text-center">Access your partner account.</p>
+            <h2 className="text-3xl font-black text-[#2e0561] mb-2 text-center">Login</h2>
+            <p className="text-slate-400 mb-8 text-sm font-medium text-center">Access your partner account.</p>
             
             <form className="space-y-5" onSubmit={handleLogin}>
               {error && isLogin && (
@@ -152,18 +153,32 @@ export default function AuthPage() {
               )}
 
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-gray-600 uppercase tracking-widest ml-1">Email</label>
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Email</label>
                 <div className="relative">
-                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                  <input name="email" type="email" value={formData.email} onChange={handleChange} placeholder="name@email.com" className="w-full pl-11 pr-4 py-3.5 bg-gray-50 text-gray-600 border border-gray-100 rounded-xl focus:ring-2 focus:ring-[#471396] outline-none transition-all text-sm" />
+                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <input 
+                    name="email" 
+                    type="email" 
+                    value={formData.email} 
+                    onChange={handleChange} 
+                    placeholder="name@email.com" 
+                    className="w-full pl-11 pr-4 py-3.5 bg-slate-50 text-slate-700 font-semibold border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#471396] outline-none transition-all text-sm placeholder:text-gray-400 placeholder:font-medium" 
+                  />
                 </div>
               </div>
 
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-gray-600 uppercase tracking-widest">Password</label>
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Password</label>
                 <div className="relative">
-                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                  <input name="password" type="password" value={formData.password} onChange={handleChange} placeholder="••••••••" className="w-full pl-11 pr-4 py-3.5 bg-gray-50 text-gray-600 border border-gray-100 rounded-xl focus:ring-2 focus:ring-[#471396] outline-none transition-all text-sm" />
+                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <input 
+                    name="password" 
+                    type="password" 
+                    value={formData.password} 
+                    onChange={handleChange} 
+                    placeholder="••••••••" 
+                    className="w-full pl-11 pr-4 py-3.5 bg-slate-50 text-slate-700 font-semibold border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#471396] outline-none transition-all text-sm placeholder:text-gray-400 placeholder:font-medium" 
+                  />
                 </div>
               </div>
 
@@ -177,8 +192,8 @@ export default function AuthPage() {
         {/* --- SIGNUP SIDE --- */}
         <div className="w-1/2 p-12 flex flex-col justify-center">
           <div className="max-w-[320px] mx-auto w-full">
-            <h2 className="text-3xl font-black text-[#090040] mb-2 text-center">Create Account</h2>
-            <p className="text-gray-400 mb-8 text-sm font-medium text-center">Step 1: Set up your credentials.</p>
+            <h2 className="text-3xl font-black text-[#2e0561] mb-2 text-center">Create Account</h2>
+            <p className="text-slate-400 mb-8 text-sm font-medium text-center">Step 1: Set up your credentials.</p>
             
             <form className="space-y-4" onSubmit={handleRegister}>
               {error && !isLogin && (
@@ -189,30 +204,51 @@ export default function AuthPage() {
               )}
 
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-gray-600 uppercase tracking-widest ml-1">Your Name</label>
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Your Name</label>
                 <div className="relative">
-                  <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                  <input name="name" type="text" value={formData.name} onChange={handleChange} placeholder="Full Name" className="w-full pl-11 pr-4 py-3.5 bg-gray-50 text-gray-600 border border-gray-100 rounded-xl focus:ring-2 focus:ring-[#471396] outline-none transition-all text-sm" />
+                  <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <input 
+                    name="name" 
+                    type="text" 
+                    value={formData.name} 
+                    onChange={handleChange} 
+                    placeholder="Full Name" 
+                    className="w-full pl-11 pr-4 py-3.5 bg-slate-50 text-slate-700 font-semibold border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#471396] outline-none transition-all text-sm placeholder:text-gray-400 placeholder:font-medium" 
+                  />
                 </div>
               </div>
 
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-gray-600 uppercase tracking-widest ml-1">Email Address</label>
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Email Address</label>
                 <div className="relative">
-                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                  <input name="email" type="email" value={formData.email} onChange={handleChange} placeholder="name@email.com" className="w-full pl-11 pr-4 py-3.5 bg-gray-50 text-gray-600 border border-gray-100 rounded-xl focus:ring-2 focus:ring-[#471396] outline-none transition-all text-sm" />
+                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <input 
+                    name="email" 
+                    type="email" 
+                    value={formData.email} 
+                    onChange={handleChange} 
+                    placeholder="name@email.com" 
+                    className="w-full pl-11 pr-4 py-3.5 bg-slate-50 text-slate-700 font-semibold border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#471396] outline-none transition-all text-sm placeholder:text-gray-400 placeholder:font-medium" 
+                  />
                 </div>
               </div>
 
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-gray-600 uppercase tracking-widest ml-1">Set Password</label>
+                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Set Password</label>
                 <div className="relative">
-                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                  <input name="password" type="password" value={formData.password} onChange={handleChange} placeholder="••••••••" className="w-full pl-11 pr-4 py-3.5 bg-gray-50 text-gray-600 border border-gray-100 rounded-xl focus:ring-2 focus:ring-[#471396] outline-none transition-all text-sm" />
+                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <input 
+                    name="password" 
+                    type="password" 
+                    value={formData.password} 
+                    onChange={handleChange} 
+                    placeholder="••••••••" 
+                    className="w-full pl-11 pr-4 py-3.5 bg-slate-50 text-slate-700 font-semibold border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#471396] outline-none transition-all text-sm placeholder:text-gray-400 placeholder:font-medium" 
+                  />
                 </div>
               </div>
 
-              <button type="submit" className="w-full py-4 bg-[#FFCC00] text-[#471396] rounded-xl font-bold text-sm shadow-lg shadow-yellow-500/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2">
+              <button type="submit" className="w-full py-4 bg-[#FFCC00] text-[#2e0561] rounded-xl font-bold text-sm shadow-lg shadow-yellow-500/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2">
                 Sign Up<ArrowRight className="w-4 h-4" />
               </button>
             </form>

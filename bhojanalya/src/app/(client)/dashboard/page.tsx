@@ -16,22 +16,12 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<any>(null);
   const [restaurants, setRestaurants] = useState<any[]>([]);
-  const [isDuplicate, setIsDuplicate] = useState(false);
 
   const isRegistered = restaurants.length > 0;
 
+  // 1. Fetch Data Logic
   useEffect(() => {
-    const channel = new BroadcastChannel('bhojanalya_session');
-    channel.onmessage = (event) => {
-      if (event.data === 'CHECK_EXISTING') channel.postMessage('I_EXIST');
-      else if (event.data === 'I_EXIST') setIsDuplicate(true);
-    };
-    channel.postMessage('CHECK_EXISTING');
-    return () => channel.close();
-  }, []);
-
-  useEffect(() => {
-    if (isDuplicate) return;
+    
     const token = localStorage.getItem('token');
     if (!token) { router.push('/auth'); return; }
 
@@ -41,7 +31,7 @@ export default function Dashboard() {
         setUser(userData);
         
         const myRestaurants = await apiRequest('/restaurants/me');
-        console.log("DASHBOARD DATA RECEIVED:", myRestaurants); // 🔍 Debugging Log
+        console.log("DASHBOARD DATA RECEIVED:", myRestaurants); 
         setRestaurants(myRestaurants || []);
       } catch (err) {
         localStorage.removeItem('token');
@@ -51,10 +41,12 @@ export default function Dashboard() {
       }
     };
     fetchData();
-  }, [router, isDuplicate]);
+  }, [router]);
 
+  // 2. Action Button Logic
   const handleActionClick = () => {
     if (isRegistered) {
+      // Handles both Uppercase (Go) and Lowercase (Postgres) keys
       const safeId = restaurants[0].ID || restaurants[0].id;
       if (safeId) {
         window.open(`/preview?id=${safeId}`, "_blank");
@@ -67,7 +59,6 @@ export default function Dashboard() {
     }
   };
 
-  if (isDuplicate) return <div className="min-h-screen flex items-center justify-center bg-slate-50 text-slate-500">Session active in another tab.</div>;
   if (loading) return <div className="min-h-screen flex items-center justify-center bg-[#F8F9FB]"><div className="w-12 h-12 bg-[#471396]/20 rounded-full animate-bounce" /></div>;
 
   return (
@@ -110,7 +101,7 @@ export default function Dashboard() {
             <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
             <div className="relative z-10 h-full flex items-center justify-between p-8">
               <div className={isRegistered ? "text-white" : "text-[#2e0561]"}>
-                {/* ✅ FIX: Access Name or name */}
+                {/* Access Name safely */}
                 <h3 className="text-2xl font-black mb-1">{isRegistered ? (restaurants[0]?.Name || restaurants[0]?.name) : "Complete Setup"}</h3>
                 <p className={`text-xs font-medium opacity-80 max-w-[250px] ${isRegistered ? "text-purple-200" : "text-purple-900"}`}>
                   {isRegistered ? "Manage your orders and view your live storefront." : "Register your restaurant to unlock the full dashboard."}

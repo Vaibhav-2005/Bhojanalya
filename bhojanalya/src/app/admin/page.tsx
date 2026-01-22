@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   CheckCircle2, XCircle, ChevronDown, Clock, 
-  Smartphone, TrendingUp, Store, Loader2, AlertOctagon
+  Smartphone, TrendingUp, Store, Loader2
 } from "lucide-react";
 import { apiRequest } from "@/lib/api";
 
@@ -15,26 +15,10 @@ export default function AdminDashboard() {
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [requests, setRequests] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isDuplicate, setIsDuplicate] = useState(false);
 
-  // 1. SINGLE SESSION LOGIC (Prevents multiple admin tabs)
+  // SECURITY GUARD (Auth & Role Check Only)
+  // Global session check is now handled by layout.tsx
   useEffect(() => {
-    const channel = new BroadcastChannel('bhojanalya_admin_session');
-    channel.onmessage = (event) => {
-      if (event.data === 'CHECK_EXISTING') {
-        channel.postMessage('I_EXIST');
-      } else if (event.data === 'I_EXIST') {
-        setIsDuplicate(true);
-      }
-    };
-    channel.postMessage('CHECK_EXISTING');
-    return () => channel.close();
-  }, []);
-
-  // 2. SECURITY GUARD (Auth & Role Check)
-  useEffect(() => {
-    if (isDuplicate) return;
-
     const token = localStorage.getItem('token');
     
     // Check 1: Token Existence
@@ -68,7 +52,6 @@ export default function AdminDashboard() {
           setRequests(data || []);
         } catch (err) {
           console.error("Failed to fetch requests", err);
-          // Optional: Handle 401 from backend by redirecting to auth
         } finally {
           setLoading(false);
         }
@@ -80,7 +63,7 @@ export default function AdminDashboard() {
       localStorage.removeItem('token');
       router.push('/auth');
     }
-  }, [router, isDuplicate]);
+  }, [router]);
 
   const toggleExpand = (id: number) => {
     setExpandedId(expandedId === id ? null : id);
@@ -88,26 +71,9 @@ export default function AdminDashboard() {
 
   const handleAction = (id: number, action: 'accept' | 'reject') => {
     // In real app: await apiRequest(`/restaurants/${id}/${action}`, 'PATCH')
+    // Optimistic UI update
     setRequests(prev => prev.filter(req => req.ID !== id));
   };
-
-  // 🛑 RENDER: DUPLICATE TAB SCREEN
-  if (isDuplicate) {
-    return (
-      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 text-center font-sans">
-        <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mb-6 animate-pulse">
-          <AlertOctagon className="w-8 h-8 text-red-500" />
-        </div>
-        <h1 className="text-2xl font-black text-slate-900 mb-2">Admin Session Active</h1>
-        <p className="text-slate-500 max-w-sm mb-8">
-          Security Protocol: The Admin Dashboard is open in another tab. Please close this one.
-        </p>
-        <button onClick={() => window.location.reload()} className="px-6 py-3 bg-white border border-slate-200 rounded-xl font-bold text-slate-600 hover:bg-slate-100 transition-colors shadow-sm">
-          Retry Connection
-        </button>
-      </div>
-    );
-  }
 
   if (loading) {
     return (
