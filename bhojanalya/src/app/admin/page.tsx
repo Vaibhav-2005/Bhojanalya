@@ -1,47 +1,121 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   CheckCircle2, XCircle, ChevronDown, Clock, 
-  Smartphone, TrendingUp, Store, Loader2
+  Smartphone, TrendingUp, Store, Loader2, AlertOctagon
 } from "lucide-react";
 import { apiRequest } from "@/lib/api";
 
 export default function AdminDashboard() {
+  const router = useRouter();
+  
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [requests, setRequests] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isDuplicate, setIsDuplicate] = useState(false);
 
+  // 1. SINGLE SESSION LOGIC (Prevents multiple admin tabs)
   useEffect(() => {
-    const fetchRequests = async () => {
-      try {
-        const data = await apiRequest('/restaurants/pending');
-        setRequests(data || []);
-      } catch (err) {
-        console.error("Failed to fetch requests", err);
-      } finally {
-        setLoading(false);
+    const channel = new BroadcastChannel('bhojanalya_admin_session');
+    channel.onmessage = (event) => {
+      if (event.data === 'CHECK_EXISTING') {
+        channel.postMessage('I_EXIST');
+      } else if (event.data === 'I_EXIST') {
+        setIsDuplicate(true);
       }
     };
-    fetchRequests();
+    channel.postMessage('CHECK_EXISTING');
+    return () => channel.close();
   }, []);
+
+  // 2. SECURITY GUARD (Auth & Role Check)
+  useEffect(() => {
+    if (isDuplicate) return;
+
+    const token = localStorage.getItem('token');
+    
+    // Check 1: Token Existence
+    if (!token) {
+      router.push('/auth');
+      return;
+    }
+
+    try {
+      // Check 2: Role Verification (Decode JWT)
+      const base64Url = token.split('.')[1];
+      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+      const jsonPayload = decodeURIComponent(window.atob(base64).split('').map(function(c) {
+          return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+      }).join(''));
+
+      const decodedToken = JSON.parse(jsonPayload);
+      const role = (decodedToken.role || "").toUpperCase();
+
+      if (role !== "ADMIN") {
+        // If logged in but NOT admin, kick to client dashboard
+        console.warn("Unauthorized Access: User is not Admin");
+        router.push('/dashboard');
+        return;
+      }
+
+      // 3. If Valid Admin, Fetch Data
+      const fetchRequests = async () => {
+        try {
+          const data = await apiRequest('/restaurants/pending');
+          setRequests(data || []);
+        } catch (err) {
+          console.error("Failed to fetch requests", err);
+          // Optional: Handle 401 from backend by redirecting to auth
+        } finally {
+          setLoading(false);
+        }
+      };
+      fetchRequests();
+
+    } catch (e) {
+      // If token is malformed, force logout
+      localStorage.removeItem('token');
+      router.push('/auth');
+    }
+  }, [router, isDuplicate]);
 
   const toggleExpand = (id: number) => {
     setExpandedId(expandedId === id ? null : id);
   };
 
   const handleAction = (id: number, action: 'accept' | 'reject') => {
-    // UI Update simulation
-    // In real app, you would call apiRequest('/restaurants/approve', 'POST', { id })
-    // ✅ FIX: Use Uppercase .ID for filtering
+    // In real app: await apiRequest(`/restaurants/${id}/${action}`, 'PATCH')
     setRequests(prev => prev.filter(req => req.ID !== id));
   };
+
+  // 🛑 RENDER: DUPLICATE TAB SCREEN
+  if (isDuplicate) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 text-center font-sans">
+        <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mb-6 animate-pulse">
+          <AlertOctagon className="w-8 h-8 text-red-500" />
+        </div>
+        <h1 className="text-2xl font-black text-slate-900 mb-2">Admin Session Active</h1>
+        <p className="text-slate-500 max-w-sm mb-8">
+          Security Protocol: The Admin Dashboard is open in another tab. Please close this one.
+        </p>
+        <button onClick={() => window.location.reload()} className="px-6 py-3 bg-white border border-slate-200 rounded-xl font-bold text-slate-600 hover:bg-slate-100 transition-colors shadow-sm">
+          Retry Connection
+        </button>
+      </div>
+    );
+  }
 
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#F8F9FB]">
-        <Loader2 className="w-8 h-8 animate-spin text-[#471396]" />
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="w-8 h-8 animate-spin text-[#471396]" />
+          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Verifying Admin Access...</p>
+        </div>
       </div>
     );
   }
@@ -76,7 +150,6 @@ export default function AdminDashboard() {
           <AnimatePresence mode="popLayout">
             {requests.map((req) => (
               <motion.div 
-                // ✅ FIX: Use Uppercase .ID
                 key={req.ID}
                 layout
                 initial={{ opacity: 0, y: 20 }}
@@ -92,11 +165,9 @@ export default function AdminDashboard() {
                   <div className="flex items-center gap-6">
                     <div className="w-1.5 h-12 rounded-full bg-blue-400" />
                     <div>
-                      {/* ✅ FIX: Use Uppercase .Name */}
                       <h3 className="text-lg font-bold text-slate-800 group-hover:text-[#471396] transition-colors">{req.Name}</h3>
                       <div className="flex items-center gap-2 mt-1">
                         <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-md bg-purple-100 text-purple-700">New Registration</span>
-                        {/* ✅ FIX: Use Uppercase .CreatedAt */}
                         <span className="text-[10px] text-slate-400 flex items-center gap-1"><Clock size={10} /> {new Date(req.CreatedAt).toLocaleDateString()}</span>
                       </div>
                     </div>
@@ -127,7 +198,6 @@ export default function AdminDashboard() {
                       <div className="md:col-span-2">
                         <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Details</h4>
                         <div className="grid grid-cols-2 gap-4">
-                             {/* ✅ FIX: Use Uppercase Keys */}
                              <DetailCard label="City" value={req.City} />
                              <DetailCard label="Cuisine" value={req.CuisineType} />
                              <DetailCard label="Owner ID" value={req.OwnerID} />

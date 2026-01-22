@@ -1,23 +1,61 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { ArrowLeft, Mail, Lock, User, ShieldCheck, ArrowRight, AlertTriangle } from "lucide-react";
+import { ArrowLeft, Mail, Lock, User, ShieldCheck, ArrowRight, AlertTriangle, Loader2 } from "lucide-react";
 import Image from "next/image";
 import Logo from "../../../public/bhojnalaya-text.png";
 import { apiRequest } from "@/lib/api";
 
 export default function AuthPage() {
   const router = useRouter();
+  
+  // States
   const [isLogin, setIsLogin] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [checkingSession, setCheckingSession] = useState(true); // ✅ New Loading State
 
   const [formData, setFormData] = useState({
     name: "",
     email: "",
     password: ""
   });
+
+  // 1. SESSION GUARD: Redirect if already logged in
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    
+    if (token) {
+      try {
+        // Decode token to find role
+        const base64Url = token.split('.')[1];
+        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+        const jsonPayload = decodeURIComponent(window.atob(base64).split('').map(function(c) {
+            return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+        }).join(''));
+
+        const decodedToken = JSON.parse(jsonPayload);
+        const role = (decodedToken.role || "").toUpperCase();
+
+        // Redirect based on role
+        if (role === "ADMIN") {
+          router.replace("/admin");
+        } else {
+          router.replace("/dashboard");
+        }
+        // Don't stop loading state, so UI doesn't flash
+        return; 
+
+      } catch (e) {
+        // Token invalid/corrupt - clear it and show login
+        localStorage.removeItem('token');
+        setCheckingSession(false);
+      }
+    } else {
+      setCheckingSession(false);
+    }
+  }, [router]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -33,13 +71,11 @@ export default function AuthPage() {
         password: formData.password
       });
 
-      // 1. Store Token
       const token = data.token;
       if (!token) throw new Error("No token received from server");
       localStorage.setItem('token', token);
 
-      // 2. Decode Token
-      // We manually decode the JWT payload to find the "role"
+      // Manual Decode for Role
       const base64Url = token.split('.')[1];
       const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
       const jsonPayload = decodeURIComponent(window.atob(base64).split('').map(function(c) {
@@ -47,18 +83,11 @@ export default function AuthPage() {
       }).join(''));
 
       const decodedToken = JSON.parse(jsonPayload);
-      
-      // 🔍 DEBUG: Check what the role actually is
-      console.log("User Role:", decodedToken.role); 
-
-      // 3. Route Based on Exact Database Roles
-      // We normalize to uppercase just to be safe, but check for "ADMIN" specifically.
       const role = (decodedToken.role || "").toUpperCase();
 
       if (role === "ADMIN") {
         router.push("/admin");
       } else {
-        // "RESTAURANT" or any other role goes to the dashboard
         router.push("/dashboard");
       }
 
@@ -76,13 +105,22 @@ export default function AuthPage() {
         email: formData.email,
         password: formData.password
       });
-      setIsLogin(true); // Switch to login view on success
+      setIsLogin(true);
       setError(null);
-      // Ideally show a success toast here
+      alert("Registration Successful! Please Login.");
     } catch (err: any) {
       setError(err.message || "Registration failed. Try a different email.");
     }
   };
+
+  // ✅ PREVENT FLASHING: Show loader while checking session
+  if (checkingSession) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <Loader2 className="w-8 h-8 animate-spin text-[#471396]" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-6 relative overflow-hidden">
