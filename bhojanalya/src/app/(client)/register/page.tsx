@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { 
   Utensils, MapPin, Clock, FileText, 
   ChevronRight, User, CheckCircle2, 
-  Menu as MenuIcon, Sparkles
+  Menu as MenuIcon, Sparkles, Loader2, UploadCloud
 } from "lucide-react";
 import { Inter } from "next/font/google";
 import { apiRequest } from "@/lib/api";
@@ -17,35 +17,34 @@ export default function RegisterRestaurant() {
   const router = useRouter();
   const [step, setStep] = useState(1);
   const totalSteps = 6;
+  
+  // States
   const [errors, setErrors] = useState<{[key: string]: string}>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [statusMessage, setStatusMessage] = useState("");
   const [isLoadingUser, setIsLoadingUser] = useState(true);
+  
+  // New States for the specific flow
+  const [isMenuUploaded, setIsMenuUploaded] = useState(false);
+  const [restaurantCreated, setRestaurantCreated] = useState(false);
 
-  // Refs
   const menuInputRef = useRef<HTMLInputElement>(null);
 
-  // Form State
   const [formData, setFormData] = useState({
-    // Step 1
     restaurantName: "", 
     cuisine: "",
-    // Step 2
     ownerName: "", 
     email: "",     
     phone: "",
-    // Step 3
     address: "", 
     city: "", 
     state: "", 
     zip: "",
-    // Step 4
     gstin: "", 
     fssai: "",
-    // Step 5
     openTime: "", 
     closeTime: "",
     description: "", 
-    // Step 6
     menuFile: null as File | null,
   });
 
@@ -69,7 +68,7 @@ export default function RegisterRestaurant() {
     fetchUser();
   }, [router]);
 
-  // --- Validation Logic ---
+  // --- Validation ---
   const validateStep = (currentStep: number) => {
     let newErrors: {[key: string]: string} = {};
 
@@ -77,18 +76,19 @@ export default function RegisterRestaurant() {
       if (!formData.restaurantName) newErrors.restaurantName = "Restaurant name is required";
       if (!formData.cuisine) newErrors.cuisine = "Cuisine type is required";
     }
-
     if (currentStep === 2) {
       if (!formData.phone || formData.phone.length !== 10) newErrors.phone = "Valid 10-digit mobile number required";
     }
-
+    if (currentStep === 3) {
+      if (!formData.city) newErrors.city = "City is required"; // ✅ Mandatory
+      if (!formData.address) newErrors.address = "Address is required";
+      if (!formData.state) newErrors.state = "State is required";
+      if (!formData.zip) newErrors.zip = "Zip Code is required";
+    }
     if (currentStep === 4) {
       const gstRegex = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
-      if (formData.gstin && !gstRegex.test(formData.gstin)) {
-        newErrors.gstin = "Invalid GSTIN format";
-      }
+      if (formData.gstin && !gstRegex.test(formData.gstin)) newErrors.gstin = "Invalid GSTIN format";
     }
-    
     if (currentStep === 5) {
       if (!formData.description) newErrors.description = "Description is required";
     }
@@ -97,31 +97,95 @@ export default function RegisterRestaurant() {
     return Object.keys(newErrors).length === 0;
   };
 
-  // --- Handlers ---
-  const handleNext = async (e: React.FormEvent) => {
+  // --- 1. SUBMIT DATA HANDLER (JSON) ---
+  const submitRestaurantData = async () => {
+    if (restaurantCreated) return; // Don't create twice
+
+    const payload = {
+      name: formData.restaurantName,
+      cuisine_type: formData.cuisine,
+      description: formData.description,
+      address: formData.address,
+      city: formData.city,
+      state: formData.state,
+      zip_code: formData.zip,
+      opening_time: formData.openTime,
+      closing_time: formData.closeTime,
+      phone: formData.phone,
+      gstin: formData.gstin || undefined,
+      fssai: formData.fssai || undefined
+    };
+
+    await apiRequest('/restaurants', 'POST', payload);
+    setRestaurantCreated(true);
+  };
+
+  // --- 2. SUBMIT FILE HANDLER (Multipart) ---
+  const submitMenuFile = async () => {
+    if (!formData.menuFile) return;
+
+    const fileData = new FormData();
+    fileData.append("menu_file", formData.menuFile);
+
+    const token = localStorage.getItem('token');
+    
+    // Using generic endpoint as per backend logic
+    const response = await fetch('/menus/upload', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`
+        // Content-Type handled automatically
+      },
+      body: fileData
+    });
+
+    if (!response.ok) {
+      const err = await response.json();
+      throw new Error(err.error || "Menu upload failed");
+    }
+  };
+
+  // --- SPECIFIC HANDLER: Upload Menu Button ---
+  const handleUploadMenu = async () => {
+    if (!formData.menuFile) {
+      alert("Please select a menu file first.");
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      // 1. Create Restaurant (if not already done)
+      setStatusMessage("Saving Profile...");
+      await submitRestaurantData();
+
+      // 2. Upload Menu
+      setStatusMessage("Uploading Menu...");
+      await submitMenuFile();
+
+      // 3. Success State
+      setIsMenuUploaded(true);
+      setStatusMessage("Done!");
+      
+    } catch (err: any) {
+      console.error("Upload error:", err);
+      alert(err.message || "Failed to upload menu.");
+      setIsMenuUploaded(false);
+    } finally {
+      setIsSubmitting(false);
+      setStatusMessage("");
+    }
+  };
+
+  // --- Navigation Handlers ---
+  const handleNextStep = (e: React.FormEvent) => {
     e.preventDefault();
     if (validateStep(step)) {
       if (step < totalSteps) {
         setStep(step + 1);
       } else {
-        setIsSubmitting(true);
-        try {
-          // Payload Sanitization
-          const payload = {
-            name: formData.restaurantName,
-            city: formData.city || "Unknown",
-            cuisine_type: formData.cuisine
-          };
-
-          await apiRequest('/restaurants', 'POST', payload);
-          alert("Registration Submitted Successfully!");
+        // Final Step: Complete Registration (Only works if menu uploaded)
+        if (isMenuUploaded) {
           router.push("/dashboard");
-
-        } catch (err: any) {
-          console.error("Submission error:", err);
-          alert(err.message || "Failed to register. Please try again.");
-        } finally {
-          setIsSubmitting(false);
         }
       }
     }
@@ -142,6 +206,7 @@ export default function RegisterRestaurant() {
   const handleMenuUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       setFormData(prev => ({ ...prev, menuFile: e.target.files![0] }));
+      setIsMenuUploaded(false); // Reset upload status if file changes
     }
   };
 
@@ -174,7 +239,7 @@ export default function RegisterRestaurant() {
         animate={{ y: 0, opacity: 1 }}
         className="max-w-4xl mx-auto -mt-32 bg-white rounded-3xl shadow-xl shadow-slate-200 border border-slate-100 p-8 md:p-12 relative z-10"
       >
-        <form onSubmit={handleNext} className="min-h-[450px] flex flex-col">
+        <form className="min-h-[450px] flex flex-col">
           <AnimatePresence mode="wait">
             <motion.div
               key={step}
@@ -207,20 +272,16 @@ export default function RegisterRestaurant() {
                 </div>
               )}
 
-              {/* Step 2: Owner Details (UPDATED LAYOUT) */}
+              {/* Step 2: Owner Details */}
               {step === 2 && (
                 <div className="space-y-8">
                   <StepHeader title="Owner Details" subtitle="Auto-filled from your account" icon={<User />} />
-                  
-                  {/* Row 1: Owner Name (Full Width) */}
                   <Input 
                     label="Owner Full Name" 
                     value={formData.ownerName}
                     disabled={true} 
                     className="bg-slate-100 text-slate-500 cursor-not-allowed" 
                   />
-
-                  {/* Row 2: Mobile & Email (Side by Side) */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                     <Input 
                       label="Mobile Number" 
@@ -248,6 +309,7 @@ export default function RegisterRestaurant() {
                     label="Street Address" 
                     value={formData.address}
                     onChange={(e) => handleChange("address", e.target.value)}
+                    error={errors.address}
                     placeholder="Plot No, Street, Landmark"
                   />
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -255,18 +317,21 @@ export default function RegisterRestaurant() {
                       label="City" 
                       value={formData.city}
                       onChange={(e) => handleChange("city", e.target.value)}
+                      error={errors.city}
                       placeholder="Gurugram"
                     />
                     <Input 
                       label="State" 
                       value={formData.state} 
-                      onChange={(e) => handleChange("state", e.target.value)} 
+                      onChange={(e) => handleChange("state", e.target.value)}
+                      error={errors.state} 
                       placeholder="Haryana"
                     />
                     <Input 
                       label="Zip Code" 
                       value={formData.zip}
                       onChange={(e) => handleChange("zip", e.target.value)}
+                      error={errors.zip}
                       maxLength={6}
                       placeholder="122001"
                     />
@@ -300,44 +365,19 @@ export default function RegisterRestaurant() {
               {step === 5 && (
                 <div className="space-y-8">
                   <StepHeader title="Details & Timings" subtitle="Operational hours and description" icon={<Clock />} />
-                  
-                  {/* Timings */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    <Input 
-                        label="Opening Time" 
-                        type="time" 
-                        value={formData.openTime} 
-                        onChange={(e) => handleChange("openTime", e.target.value)} 
-                    />
-                    <Input 
-                        label="Closing Time" 
-                        type="time" 
-                        value={formData.closeTime} 
-                        onChange={(e) => handleChange("closeTime", e.target.value)} 
-                    />
+                    <Input label="Opening Time" type="time" value={formData.openTime} onChange={(e) => handleChange("openTime", e.target.value)} />
+                    <Input label="Closing Time" type="time" value={formData.closeTime} onChange={(e) => handleChange("closeTime", e.target.value)} />
                   </div>
-
-                  {/* Description Box with AI Button */}
                   <div className="relative pt-2">
-                    <div className="flex justify-between items-end mb-1.5 px-1">
-                      <label className="text-sm font-bold text-slate-800">Short Description</label>
-                      <button 
-                        type="button"
-                        onClick={() => alert("AI Writer coming soon!")}
-                        className="flex items-center gap-1.5 text-[10px] font-bold text-[#471396] bg-purple-50 px-3 py-1.5 rounded-full hover:bg-purple-100 transition-colors border border-purple-100"
-                      >
-                        <Sparkles className="w-3 h-3" />
-                        Write with AI
-                      </button>
-                    </div>
-                    
+                    <label className="text-sm font-bold text-slate-800 mb-1.5 block">Short Description</label>
                     <textarea 
                         className={`
                           w-full px-4 py-4 bg-slate-50 border rounded-xl outline-none transition-all h-32 resize-none
-                          text-slate-700 font-semibold placeholder:text-gray-400 placeholder:font-medium
+                          text-slate-600 font-semibold placeholder:text-gray-400 placeholder:font-medium
                           ${errors.description ? "border-red-300 bg-red-50" : "border-slate-200 focus:border-[#2E0561]"}
                         `}
-                        placeholder="e.g. Authentic flavors from Punjab, serving fresh dishes since 1995."
+                        placeholder="e.g. Authentic flavors from Punjab..."
                         value={formData.description}
                         onChange={(e) => handleChange("description", e.target.value)}
                     />
@@ -350,30 +390,61 @@ export default function RegisterRestaurant() {
               {step === 6 && (
                 <div className="space-y-8">
                   <StepHeader title="Restaurant Menu" subtitle="Upload your menu card" icon={<MenuIcon />} />
-                  <div className="max-w-xl mx-auto">
+                  <div className="max-w-xl mx-auto flex flex-col gap-6">
+                    
+                    {/* File Selection Area */}
                     <div 
-                      onClick={() => menuInputRef.current?.click()} 
-                      className="border-2 border-dashed rounded-2xl p-10 text-center cursor-pointer group flex flex-col items-center justify-center min-h-[300px] relative border-slate-300 hover:border-[#FFCC00] hover:bg-yellow-50 transition-colors"
+                      onClick={() => !isMenuUploaded && menuInputRef.current?.click()} 
+                      className={`
+                        border-2 border-dashed rounded-2xl p-10 text-center group flex flex-col items-center justify-center min-h-[250px] relative transition-colors
+                        ${isMenuUploaded ? "border-green-200 bg-green-50 cursor-default" : "cursor-pointer border-slate-300 hover:border-[#FFCC00] hover:bg-yellow-50"}
+                      `}
                     >
-                       <input type="file" ref={menuInputRef} onChange={handleMenuUpload} accept=".pdf,.jpg" className="hidden" />
-                       <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mb-6 shadow-sm border border-slate-200">
-                          {formData.menuFile ? <CheckCircle2 className="w-8 h-8 text-green-600" /> : <MenuIcon className="w-8 h-8 text-[#FFCC00]" />}
+                       <input type="file" ref={menuInputRef} onChange={handleMenuUpload} accept=".pdf,.jpg" className="hidden" disabled={isMenuUploaded} />
+                       
+                       <div className={`w-16 h-16 rounded-full flex items-center justify-center mb-6 shadow-sm border ${isMenuUploaded ? "bg-green-100 border-green-200" : "bg-white border-slate-200"}`}>
+                          {isMenuUploaded || formData.menuFile ? <CheckCircle2 className="w-8 h-8 text-green-600" /> : <MenuIcon className="w-8 h-8 text-[#FFCC00]" />}
                        </div>
                        
                        {formData.menuFile ? (
                         <>
-                          <span className="text-slate-900 font-bold text-xl">Menu Attached</span>
+                          <span className="text-slate-900 font-bold text-xl">{isMenuUploaded ? "Upload Successful" : "File Selected"}</span>
                           <p className="text-sm text-green-700 font-medium mt-2">{formData.menuFile.name}</p>
-                          <button type="button" className="mt-8 text-xs font-bold text-green-800 bg-green-100 px-6 py-2 rounded-full uppercase tracking-wide">Change File</button>
+                          {!isMenuUploaded && (
+                            <button type="button" className="mt-6 text-xs font-bold text-slate-500 underline hover:text-red-500">Change File</button>
+                          )}
                         </>
                        ) : (
                         <>
-                          <span className="text-slate-900 font-bold text-xl">Upload Menu</span>
+                          <span className="text-slate-900 font-bold text-xl">Select Menu File</span>
                           <p className="text-sm text-slate-500 mt-3 px-8 leading-relaxed">Supported formats: PDF, JPG, PNG.</p>
-                          <span className="mt-8 text-xs font-bold text-slate-900 bg-[#FFCC00] px-6 py-3 rounded-full shadow-lg shadow-yellow-500/20 group-hover:scale-105 transition-transform">Browse Files</span>
+                          <span className="mt-8 text-xs font-bold text-slate-900 bg-[#FFCC00] px-6 py-3 rounded-full shadow-lg shadow-yellow-500/20 group-hover:scale-105 transition-transform">Browse</span>
                         </>
                        )}
                     </div>
+
+                    {/* NEW: Dedicated Upload Button */}
+                    {!isMenuUploaded && formData.menuFile && (
+                      <button 
+                        type="button"
+                        onClick={handleUploadMenu}
+                        disabled={isSubmitting}
+                        className="w-full py-4 bg-slate-900 text-white rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-slate-800 transition-colors shadow-xl"
+                      >
+                        {isSubmitting ? (
+                          <><Loader2 className="w-5 h-5 animate-spin" /> {statusMessage}</>
+                        ) : (
+                          <><UploadCloud className="w-5 h-5" /> Upload & Register</>
+                        )}
+                      </button>
+                    )}
+
+                    {isMenuUploaded && (
+                      <div className="bg-green-100 border border-green-200 text-green-800 p-4 rounded-xl text-center font-bold text-sm animate-in fade-in slide-in-from-bottom-2">
+                        🎉 Menu uploaded successfully! You can now complete registration.
+                      </div>
+                    )}
+
                   </div>
                 </div>
               )}
@@ -386,20 +457,25 @@ export default function RegisterRestaurant() {
               <button 
                 type="button" 
                 onClick={handleBack} 
-                disabled={isSubmitting} 
-                className="px-6 py-3 text-slate-600 font-bold hover:bg-slate-100 rounded-lg transition-colors"
+                disabled={isSubmitting} // Lock back button during upload
+                className="px-6 py-3 text-slate-600 font-bold hover:bg-slate-100 rounded-lg transition-colors disabled:opacity-50"
               >
                 Back
               </button>
             ) : <div />}
             
             <button 
-              type="submit" 
-              disabled={isSubmitting} 
-              className="px-8 py-3 bg-[#FFCC00] text-[#2E0561] font-bold rounded-lg hover:bg-[#ffdb4d] flex items-center gap-2 shadow-lg shadow-yellow-500/20"
+              onClick={handleNextStep}
+              disabled={isSubmitting || (step === totalSteps && !isMenuUploaded)}
+              className={`
+                px-8 py-3 rounded-lg font-bold flex items-center gap-2 shadow-lg transition-all
+                ${(step === totalSteps && !isMenuUploaded) 
+                  ? "bg-slate-200 text-slate-400 cursor-not-allowed shadow-none" 
+                  : "bg-[#FFCC00] text-[#2E0561] hover:bg-[#ffdb4d] shadow-yellow-500/20"}
+              `}
             >
-              {isSubmitting ? "Registering..." : (step === totalSteps ? "Complete Registration" : "Continue")}
-              {!isSubmitting && <ChevronRight className="w-4 h-4" />}
+              {step === totalSteps ? "Complete Registration" : "Continue"}
+              <ChevronRight className="w-4 h-4" />
             </button>
           </div>
         </form>
@@ -439,7 +515,7 @@ function Input({ label, error, className, ...props }: InputProps) {
       <input 
         className={`
           w-full px-4 py-3.5 bg-slate-50 border rounded-xl outline-none transition-all
-          text-slate-700 font-semibold 
+          text-slate-600 font-semibold 
           placeholder:text-gray-400 placeholder:font-medium
           ${error ? "border-red-300 bg-red-50" : "border-slate-200 focus:border-[#2E0561]"}
           ${className}
