@@ -41,26 +41,21 @@ export default function Dashboard() {
 
         const userData = await apiRequest('/protected/ping');
         
-        console.log("Dashboard User Check:", userData); // DEBUG LOG
-
-        // --- 1. ROBUST ADMIN CHECK ---
-        // Check both lowercase 'role' and uppercase 'Role' to be safe
+        // --- ROBUST ADMIN CHECK ---
         const rawRole = userData?.role || userData?.Role || "";
         const role = rawRole.toUpperCase(); 
 
         if (role === 'ADMIN' || userData?.isAdmin === true) {
             console.error("⛔ SECURITY ALERT: Admin attempted to access Client Dashboard.");
-            localStorage.removeItem('token'); // Kill session
-            window.location.href = '/auth'; // Force Hard Redirect
-            return; // Do NOT set loading to false
+            localStorage.removeItem('token'); 
+            window.location.href = '/auth'; 
+            return; 
         }
 
-        // Only reach here if NOT admin
         setUser(userData);
         const myRestaurants = await apiRequest('/restaurants/me');
         setRestaurants(myRestaurants || []);
         
-        // Only NOW do we reveal the dashboard
         setLoading(false);
 
       } catch (err) {
@@ -105,9 +100,6 @@ export default function Dashboard() {
     }
   };
 
-  // --- LOADING / BLOCKING STATE ---
-  // If loading is true, we return this loader. 
-  // Since we never set loading=false for admins, they never see the dashboard.
   if (loading) {
       return ( 
         <div className="min-h-screen flex items-center justify-center bg-[#F8F9FB]">
@@ -156,13 +148,17 @@ export default function Dashboard() {
              </div>
           </div>
 
+          {/* --- PREVIEW / RESTAURANT NAME CARD --- */}
           <div className={`md:col-span-2 md:row-span-1 rounded-[2rem] overflow-hidden relative shadow-lg group h-full ${isRegistered ? "bg-[#2e0561] shadow-purple-900/5" : "bg-[#FFCC00] shadow-yellow-500/20"}`}>
             <div className="absolute top-0 right-0 w-48 h-48 bg-white/10 rounded-full blur-2xl -translate-y-1/2 translate-x-1/2" />
             <div className="relative z-10 h-full flex flex-col justify-between p-6">
               <div className={isRegistered ? "text-white mt-2" : "text-[#2e0561] mt-2"}>
-                <h3 className="text-xl font-black mb-1">{isRegistered ? "Preview App" : "Setup Required"}</h3>
+                {/* UPDATED: Shows Restaurant Name if Registered */}
+                <h3 className="text-xl font-black mb-1 truncate pr-2">
+                    {isRegistered ? (restaurants[0]?.Name || restaurants[0]?.name || "Your Restaurant") : "Setup Required"}
+                </h3>
                 <p className={`text-[11px] font-medium opacity-80 max-w-[150px] ${isRegistered ? "text-purple-200" : "text-[#2e0561]/70"}`}>
-                  {isRegistered ? "See your menu live on the customer app." : "Register your restaurant to unlock dashboard."}
+                  {isRegistered ? "See your restaurant live on the customer app." : "Register your restaurant to unlock dashboard."}
                 </p>
               </div>
               <div className="flex justify-end">

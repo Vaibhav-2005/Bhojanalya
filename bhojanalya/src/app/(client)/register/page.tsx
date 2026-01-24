@@ -26,7 +26,6 @@ export default function RegisterRestaurant() {
   
   // Track creation status
   const [restaurantCreated, setRestaurantCreated] = useState(false);
-  // ✅ NEW: Store the ID so we can open the preview page
   const [createdRestaurantId, setCreatedRestaurantId] = useState<string | number | null>(null);
 
   const menuInputRef = useRef<HTMLInputElement>(null);
@@ -53,7 +52,6 @@ export default function RegisterRestaurant() {
   useEffect(() => {
     const init = async () => {
       try {
-        // A. Check User
         const userData = await apiRequest('/protected/ping');
         setFormData(prev => ({
           ...prev,
@@ -61,17 +59,14 @@ export default function RegisterRestaurant() {
           email: userData.email
         }));
 
-        // Check if user already has a restaurant
-        // If they do, they shouldn't be on the register page
         try {
           const myRestaurants = await apiRequest('/restaurants/me');
           if (myRestaurants && myRestaurants.length > 0) {
-            // Already registered? Redirect to Dashboard immediately.
             router.replace("/dashboard");
             return;
           }
         } catch (e) {
-          // If 404 or empty, that's good, they can proceed
+          // Proceed if no restaurant found
         }
 
       } catch (err) {
@@ -115,7 +110,6 @@ export default function RegisterRestaurant() {
 
   // --- 1. SUBMIT DATA HANDLER (JSON) ---
   const submitRestaurantData = async () => {
-    // If we already created it, return the existing ID
     if (restaurantCreated && createdRestaurantId) return createdRestaurantId;
 
     const payload = {
@@ -135,20 +129,26 @@ export default function RegisterRestaurant() {
 
     const response = await apiRequest('/restaurants', 'POST', payload);
     
-    // Save the ID and status
+    // Normalize ID from response (Go might return ID or id)
     const newId = response.ID || response.id;
+    
     setRestaurantCreated(true);
     setCreatedRestaurantId(newId);
     
     return newId;
   };
 
-  // --- 2. SUBMIT FILE HANDLER ---
-  const submitMenuFile = async () => {
+  // --- 2. SUBMIT FILE HANDLER (With Restaurant ID) ---
+  const submitMenuFile = async (restaurantId: string | number) => {
     if (!formData.menuFile) return;
 
     const fileData = new FormData();
+    
+    // 1. Append File
     fileData.append("menu_file", formData.menuFile);
+    
+    // 2. ✅ Append Restaurant ID
+    fileData.append("restaurant_id", String(restaurantId));
 
     const token = localStorage.getItem('token');
     
@@ -187,17 +187,19 @@ export default function RegisterRestaurant() {
         setStatusMessage("Creating Restaurant...");
         const restaurantId = await submitRestaurantData();
 
-        // Step B: Upload Menu
+        if (!restaurantId) {
+            throw new Error("Failed to retrieve Restaurant ID after creation.");
+        }
+
+        // Step B: Upload Menu (Passing the ID)
         setStatusMessage("Uploading Menu...");
-        await submitMenuFile();
+        await submitMenuFile(restaurantId);
 
         // Step C: Success Actions
         setStatusMessage("Done!");
         
         // 1. Open Preview in New Tab
-        if (restaurantId) {
-          window.open(`/preview?id=${restaurantId}`, "_blank");
-        }
+        window.open(`/preview?id=${restaurantId}`, "_blank");
 
         // 2. Redirect Current Tab to Dashboard
         router.push("/dashboard");
@@ -277,7 +279,7 @@ export default function RegisterRestaurant() {
               transition={{ duration: 0.2 }}
               className="flex-grow"
             >
-              {/* Steps 1-5 (Standard Inputs - Same as before) */}
+              {/* Steps 1-5 (Skipped for brevity - same logic as before) */}
               
               {step === 1 && (
                 <div className="space-y-8">
