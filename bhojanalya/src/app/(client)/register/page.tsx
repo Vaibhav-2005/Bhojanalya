@@ -61,7 +61,7 @@ export default function RegisterRestaurant() {
           email: userData.email
         }));
 
-        // B. ✅ SECURITY: Check if user already has a restaurant
+        // Check if user already has a restaurant
         // If they do, they shouldn't be on the register page
         try {
           const myRestaurants = await apiRequest('/restaurants/me');
@@ -195,7 +195,6 @@ export default function RegisterRestaurant() {
         setStatusMessage("Done!");
         
         // 1. Open Preview in New Tab
-        // ⚠️ Adjust URL structure below to match your actual preview route (e.g., /restaurant/[id])
         if (restaurantId) {
           window.open(`/preview?id=${restaurantId}`, "_blank");
         }
