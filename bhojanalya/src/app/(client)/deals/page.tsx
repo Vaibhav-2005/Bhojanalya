@@ -20,6 +20,7 @@ interface Deal {
   category: DealCategory;
   discount: number;
   source: "suggested" | "custom";
+  reason?: string;
 }
 
 export default function DealsPage() {
@@ -40,12 +41,43 @@ export default function DealsPage() {
   const [formTitle, setFormTitle] = useState("");
   const [formCategory, setFormCategory] = useState<DealCategory>("Main Course");
   const [formDiscount, setFormDiscount] = useState<string>("");
+  const [isPublishing, setIsPublishing] = useState(false);
 
   // Insights Data
-  const [insights] = useState({ myCost: 1200, marketAvg: 1400, marketMedian: 900 });
+  const [insights, setInsights] = useState({ myCost: 0, marketAvg: 0, marketMedian: 0 });
 
   const restaurantName = restaurants[0]?.Name || restaurants[0]?.name || "Your Restaurant";
   const restaurantId = restaurants[0]?.ID || restaurants[0]?.id;
+
+  // --- HELPER: MAP BACKEND DATA TO FRONTEND ---
+  const mapBackendToFrontend = (backendDeal: any, index: number): Deal => {
+    let cat: DealCategory = "Main Course";
+    const c = (backendDeal.Category || backendDeal.category || "").toLowerCase();
+    if (c.includes("starter")) cat = "Starters";
+    else if (c.includes("drink")) cat = "Drinks";
+    else if (c.includes("dessert")) cat = "Desserts";
+
+    let type: DealType = "percentage";
+    const t = (backendDeal.Type || backendDeal.type || "").toUpperCase();
+    if (t === "FLAT") type = "flat";
+
+    return {
+        id: `s-${index}`,
+        title: backendDeal.Title || backendDeal.title || "Special Offer",
+        type: type,
+        category: cat,
+        discount: backendDeal.DiscountValue || backendDeal.discount_value || 0,
+        source: "suggested",
+        reason: backendDeal.Reason || backendDeal.reason
+    };
+  };
+
+  const mapCategoryToBackend = (cat: DealCategory) => {
+      if (cat === "Starters") return "starter";
+      if (cat === "Drinks") return "drink";
+      if (cat === "Desserts") return "dessert";
+      return "main_course";
+  };
 
   // --- INITIAL DATA FETCH ---
   useEffect(() => {
@@ -54,34 +86,58 @@ export default function DealsPage() {
 
     const fetchData = async () => {
       try {
+        // Restore Status Only (Drafts are cleared on reload now)
         const storedStatus = localStorage.getItem("approval_status");
         if (storedStatus) setApprovalStatus(storedStatus);
 
+        // Fetch User
         const userData = await apiRequest('/protected/ping');
-        const role = (userData?.role || "").toUpperCase(); 
-        if (role === 'ADMIN' || userData?.isAdmin === true) {
+        if (userData?.role === 'ADMIN' || userData?.isAdmin === true) {
             localStorage.removeItem('token'); 
             window.location.href = '/auth'; 
             return; 
         }
-
         setUser(userData);
-        const myRestaurants = await apiRequest('/restaurants/me');
-        setRestaurants(myRestaurants || []);
 
-        setSuggestedDeals([
-            { id: "s1", title: "Free Coke with Pizza", type: "flat", category: "Drinks", discount: 100, source: "suggested" },
-            { id: "s2", title: "20% Off on Starters", type: "percentage", category: "Starters", discount: 20, source: "suggested" },
-            { id: "s3", title: "Happy Hour 1+1", type: "percentage", category: "Drinks", discount: 50, source: "suggested" },
-            { id: "s4", title: "Weekend Special", type: "percentage", category: "Starters", discount: 25, source: "suggested" },
-            { id: "s5", title: "Late Night 15%", type: "percentage", category: "Main Course", discount: 15, source: "suggested" },
-            { id: "s6", title: "Dessert Mania", type: "flat", category: "Desserts", discount: 150, source: "suggested" },
-            { id: "s7", title: "Family Combo Save", type: "flat", category: "Main Course", discount: 300, source: "suggested" },
-            { id: "s8", title: "Rainy Day Flat 50", type: "flat", category: "Starters", discount: 50, source: "suggested" },
-        ]);
+        // Fetch Restaurants
+        const myRestaurants = await apiRequest('/restaurants/me');
+        const rests = myRestaurants || [];
+        setRestaurants(rests);
+
+        if (rests.length > 0) {
+            const rid = rests[0].ID || rests[0].id;
+            
+            // Fetch Suggestions & Insights
+            try {
+                const response = await apiRequest(`/restaurants/${rid}/deals/suggestion`);
+                
+                if (response) {
+                    setInsights({
+                        myCost: response.RestaurantCostForTwo || response.restaurant_cost_for_two || 0,
+                        marketAvg: response.MarketAvg || response.market_avg || 0,
+                        marketMedian: response.MarketMedian || response.market_median || 0
+                    });
+
+                    const rawSuggestions = response.Suggestions || response.suggestions || [];
+                    if (Array.isArray(rawSuggestions) && rawSuggestions.length > 0) {
+                        const mapped = rawSuggestions.map((d: any, i: number) => mapBackendToFrontend(d, i));
+                        setSuggestedDeals(mapped);
+                    } else {
+                        setSuggestedDeals([
+                           { id: "s1", title: "Free Coke with Pizza", type: "flat", category: "Drinks", discount: 100, source: "suggested" },
+                           { id: "s2", title: "20% Off on Starters", type: "percentage", category: "Starters", discount: 20, source: "suggested" },
+                        ]);
+                    }
+                }
+            } catch (e) {
+                console.warn("Failed to fetch suggestions/insights", e);
+                setSuggestedDeals([{ id: "s1", title: "Try refreshing suggestions", type: "percentage", category: "Main Course", discount: 10, source: "suggested" }]);
+            }
+        }
         
         setLoading(false);
       } catch (err) {
+        console.error(err);
         localStorage.removeItem('token');
         window.location.href = '/auth';
       }
@@ -90,13 +146,18 @@ export default function DealsPage() {
   }, []);
 
   // --- HANDLERS ---
+
   const handleAddSuggestion = (deal: Deal) => {
-    setDraftDeals([...draftDeals, deal]);
+    // Add to local state only (Not localStorage)
+    const newDraft = { ...deal, id: `c-${Date.now()}`, source: "suggested" as const };
+    setDraftDeals([...draftDeals, newDraft]);
     setSuggestedDeals(suggestedDeals.filter(d => d.id !== deal.id));
   };
 
   const handleCreateDeal = () => {
     if (!formTitle || !formDiscount) return;
+    
+    // Add to local state only (Not localStorage)
     const newDeal: Deal = {
         id: `c-${Date.now()}`,
         title: formTitle,
@@ -105,6 +166,7 @@ export default function DealsPage() {
         discount: parseInt(formDiscount),
         source: "custom"
     };
+
     setDraftDeals([...draftDeals, newDeal]);
     setFormTitle("");
     setFormDiscount("");
@@ -112,12 +174,50 @@ export default function DealsPage() {
 
   const handleRemoveDeal = (deal: Deal) => {
     setDraftDeals(draftDeals.filter(d => d.id !== deal.id));
-    if (deal.source === "suggested") setSuggestedDeals([...suggestedDeals, deal]);
+    
+    if (deal.source === "suggested") {
+        setSuggestedDeals([...suggestedDeals, { ...deal, source: "suggested" }]);
+    }
   };
 
-  const handleSubmitRequest = () => {
-    setApprovalStatus("pending");
-    localStorage.setItem("approval_status", "pending");
+  // --- FIXED PUBLISH HANDLER ---
+  const handlePublishDeals = async () => {
+    if (draftDeals.length === 0 || !restaurantId) return;
+    setIsPublishing(true);
+
+    try {
+        // 1. Create Array of Promises
+        const publishPromises = draftDeals.map(deal => 
+            // FIX: Using correct (url, method, body) signature
+            apiRequest(
+                `/restaurants/${restaurantId}/deals`, 
+                "POST", 
+                {
+                    title: deal.title,
+                    type: deal.type === 'flat' ? 'FLAT' : 'PERCENTAGE',
+                    category: mapCategoryToBackend(deal.category),
+                    discount: Number(deal.discount),
+                    source: deal.source
+                }
+            )
+        );
+
+        // 2. Execute all requests
+        await Promise.all(publishPromises);
+
+        // 3. Success Sequence
+        setDraftDeals([]); // Clears list
+        setApprovalStatus("pending");
+        localStorage.setItem("approval_status", "pending");
+        
+        alert("All deals submitted for approval!");
+
+    } catch (error) {
+        console.error("Publishing failed:", error);
+        alert("Failed to publish some deals. Please check connection.");
+    } finally {
+        setIsPublishing(false);
+    }
   };
 
   const handlePreviewClick = () => {
@@ -128,15 +228,9 @@ export default function DealsPage() {
 
   return (
     <>
-    {/* GLOBAL STYLE TO HIDE SCROLLBARS EVERYWHERE */}
     <style jsx global>{`
-      ::-webkit-scrollbar {
-        display: none;
-      }
-      * {
-        -ms-overflow-style: none;
-        scrollbar-width: none;
-      }
+      ::-webkit-scrollbar { display: none; }
+      * { -ms-overflow-style: none; scrollbar-width: none; }
     `}</style>
 
     <div className="min-h-screen bg-[#F8F9FB] text-slate-900 font-sans pb-10 overflow-hidden selection:bg-[#f1cd48] selection:text-[#471396]">
@@ -177,7 +271,7 @@ export default function DealsPage() {
                 </div>
                 
                 <div className="flex-1 overflow-y-auto pr-1 space-y-3 pb-6">
-                    {suggestedDeals.length === 0 && <div className="text-xs text-slate-400 text-center py-10 italic">All suggestions added!</div>}
+                    {suggestedDeals.length === 0 && <div className="text-xs text-slate-400 text-center py-10 italic">No new suggestions.</div>}
                     {suggestedDeals.map((deal) => (
                         <div key={deal.id} onClick={() => handleAddSuggestion(deal)} className="p-4 bg-white border border-slate-100 rounded-2xl hover:border-[#f1cd48] hover:shadow-[0_4px_20px_-12px_#f1cd48] cursor-pointer transition-all duration-300 group relative">
                             <div className="flex justify-between items-start">
@@ -202,7 +296,7 @@ export default function DealsPage() {
           <div className="lg:col-span-2 flex flex-col h-full min-h-0">
              <div className="bg-white border border-slate-200 rounded-[2rem] p-8 flex flex-col h-full shadow-sm relative overflow-hidden">
                 
-                {/* TOP HALF: CREATION FORM (FIXED HEIGHT) */}
+                {/* TOP HALF: CREATION FORM */}
                 <div className="flex-shrink-0 mb-4 pb-4 border-b border-slate-100">
                     <div className="flex items-center gap-2 mb-4 text-[#471396]">
                         <div className="p-2 bg-[#f1cd48]/20 rounded-lg">
@@ -211,7 +305,6 @@ export default function DealsPage() {
                         <h3 className="font-bold text-lg">Create & Manage Deals</h3>
                     </div>
                     
-                    {/* ROW 1: Title (Approx 66%) + Category (Approx 33%) */}
                     <div className="grid grid-cols-12 gap-4">
                         <div className="col-span-8 space-y-1.5">
                             <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Title</label>
@@ -225,9 +318,7 @@ export default function DealsPage() {
                         </div>
                     </div>
 
-                    {/* ROW 2: Discount (Left) + Toggles (Mid) + Button (Right) */}
                     <div className="flex items-end gap-4 mt-4">
-                         {/* Discount Field moved to bottom */}
                          <div className="w-32 space-y-1.5 flex-shrink-0">
                             <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Discount</label>
                             <input type="number" value={formDiscount} onChange={(e) => setFormDiscount(e.target.value)} className="w-full h-12 bg-slate-50 border border-slate-200 rounded-xl px-4 text-sm font-bold focus:outline-none focus:border-[#f1cd48] focus:ring-1 focus:ring-[#f1cd48]" placeholder="20" />
@@ -266,12 +357,12 @@ export default function DealsPage() {
 
                     <div className="absolute bottom-0 left-0 w-full pt-2 bg-white z-20">
                         <button 
-                            onClick={handleSubmitRequest} 
-                            disabled={draftDeals.length === 0 || approvalStatus === 'pending'}
+                            onClick={handlePublishDeals} 
+                            disabled={draftDeals.length === 0 || isPublishing}
                             className="w-full py-4 bg-[#471396] text-white rounded-xl font-bold text-sm uppercase tracking-wider hover:bg-[#3b0d82] disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-xl shadow-[#471396]/20 flex items-center justify-center gap-2 border border-[#471396]"
                         >
-                            {approvalStatus === 'pending' ? <Clock size={18} className="text-[#f1cd48]" /> : <Send size={18} className="text-[#f1cd48]" />}
-                            {approvalStatus === 'pending' ? 'Approval Pending' : 'Publish Deals'}
+                            {isPublishing ? <Loader2 size={18} className="animate-spin text-[#f1cd48]" /> : <Send size={18} className="text-[#f1cd48]" />}
+                            {isPublishing ? 'Publishing...' : 'Publish Deals'}
                         </button>
                     </div>
                 </div>
