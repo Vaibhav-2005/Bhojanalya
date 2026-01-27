@@ -41,7 +41,7 @@ export default function EditRestaurantPage() {
           setIsBlocked(true);
           setBlockReason(status === "pending" 
             ? "Your request is pending approval. You cannot edit details yet." 
-            : "Please submit the approval request from the Dashboard first.");
+            : "Please submit the approval request from the Deals first.");
         }
 
       } catch (err) {
@@ -60,7 +60,7 @@ export default function EditRestaurantPage() {
            <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-6 text-red-500"><Lock size={32} /></div>
            <h3 className="text-xl font-bold text-slate-900 mb-2">Access Restricted</h3>
            <p className="text-sm text-slate-500 font-medium leading-relaxed mb-6">{blockReason}</p>
-           <button onClick={() => router.push("/dashboard")} className="w-full py-3 bg-[#2e0561] text-white rounded-xl font-bold text-xs uppercase tracking-wider hover:bg-[#471396] transition-colors">Back to Dashboard</button>
+           <button onClick={() => router.push("/deals")} className="w-full py-3 bg-[#2e0561] text-white rounded-xl font-bold text-xs uppercase tracking-wider hover:bg-[#471396] transition-colors">Back to Deals</button>
         </div>
       </div>
     );

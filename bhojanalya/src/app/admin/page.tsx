@@ -39,9 +39,9 @@ export default function AdminDashboard() {
       const role = (decodedToken.role || "").toUpperCase();
 
       if (role !== "ADMIN") {
-        // If logged in but NOT admin, kick to client dashboard
+        // If logged in but NOT admin, kick back to deals page
         console.warn("Unauthorized Access: User is not Admin");
-        router.push('/dashboard');
+        router.push('/deals');
         return;
       }
 

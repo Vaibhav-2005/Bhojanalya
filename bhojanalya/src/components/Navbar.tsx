@@ -52,7 +52,7 @@ export default function Navbar() {
       if (approvalStatus === "pending") {
         setBlockReason("You have already sent the request. Please wait for Admin approval.");
       } else {
-        setBlockReason("Please submit the approval request from the Dashboard bottom bar first.");
+        setBlockReason("Please submit the approval request first.");
       }
       setShowBlockPopup(true);
     }
@@ -75,7 +75,7 @@ export default function Navbar() {
       <nav className="w-full bg-[#2e0561] border-b border-white/5 sticky top-0 z-[100] shadow-lg shadow-purple-900/20">
         <div className="max-w-7xl mx-auto h-20 px-8 flex items-center justify-between relative">
           <div className="flex items-center gap-10 h-full">
-            <div className="cursor-pointer flex items-center justify-center h-full" onClick={() => router.push(isAdmin ? "/admin" : "/dashboard")}>
+            <div className="cursor-pointer flex items-center justify-center h-full" onClick={() => router.push(isAdmin ? "/admin" : "/deals")}>
               <Image src={LogoImg} alt="Bhojanalya" width={150} height={40} priority className="object-contain w-auto h-8 md:h-10" />
             </div>
             <div className="h-8 w-[1px] bg-white/10 hidden md:block" />
@@ -87,7 +87,7 @@ export default function Navbar() {
                 </>
               ) : (
                 <>
-                  <NavLink active={pathname === "/dashboard"} onClick={() => router.push("/dashboard")} icon={<LayoutDashboard size={14} />} label="Dashboard" />
+                  <NavLink active={pathname === "/deals"} onClick={() => router.push("/deals")} icon={<LayoutDashboard size={14} />} label="Deals" />
                   <button onClick={handleEditClick} className={`flex items-center gap-2 text-[11px] font-bold uppercase tracking-widest transition-all ${pathname === "/edit" ? "text-[#FFCC00]" : "text-white/60 hover:text-white"}`}>
                     {approvalStatus === "active" ? <Settings size={14} /> : <Lock size={14} />} Edit Info
                   </button>

@@ -62,7 +62,7 @@ export default function RegisterRestaurant() {
         try {
           const myRestaurants = await apiRequest('/restaurants/me');
           if (myRestaurants && myRestaurants.length > 0) {
-            router.replace("/dashboard");
+            router.replace("/deals");
             return;
           }
         } catch (e) {
@@ -201,8 +201,8 @@ export default function RegisterRestaurant() {
         // 1. Open Preview in New Tab
         window.open(`/preview?id=${restaurantId}`, "_blank");
 
-        // 2. Redirect Current Tab to Dashboard
-        router.push("/dashboard");
+        // 2. Redirect Current Tab to deals
+        router.push("/deals");
 
     } catch (err: any) {
         console.error("Process failed:", err);

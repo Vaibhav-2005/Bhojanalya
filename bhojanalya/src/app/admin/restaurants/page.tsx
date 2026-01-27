@@ -37,7 +37,7 @@ export default function RestaurantDirectory() {
 
       if (role !== "ADMIN") {
         console.warn("Unauthorized Access: User is not Admin");
-        router.push('/dashboard'); // Kick to client dashboard
+        router.push('/deals'); // Kick to deal creation page
         return;
       }
 

@@ -43,7 +43,7 @@ export default function AuthPage() {
         if (role === "ADMIN") {
           router.replace("/admin");
         } else {
-          router.replace("/dashboard");
+          router.replace("/deals");
         }
         return; 
 
@@ -88,7 +88,7 @@ export default function AuthPage() {
       if (role === "ADMIN") {
         router.push("/admin");
       } else {
-        router.push("/dashboard");
+        router.push("/deals");
       }
 
     } catch (err: any) {

@@ -20,7 +20,7 @@ function PreviewContent() {
 
   const handleClose = () => {
     if (window.opener) window.close();
-    else router.push("/dashboard");
+    else router.push("/deals");
   };
 
   useEffect(() => {
