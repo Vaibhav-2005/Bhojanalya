@@ -4,8 +4,8 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
-  CheckCircle2, XCircle, ChevronDown, Clock, 
-  Smartphone, TrendingUp, Store, Loader2
+  CheckCircle2, ChevronDown, Clock, 
+  Smartphone, Store, Loader2, MapPin, Utensils, FileText
 } from "lucide-react";
 import { apiRequest } from "@/lib/api";
 
@@ -16,19 +16,16 @@ export default function AdminDashboard() {
   const [requests, setRequests] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // SECURITY GUARD (Auth & Role Check Only)
-  // Global session check is now handled by layout.tsx
+  // --- 1. AUTH & DATA FETCHING ---
   useEffect(() => {
     const token = localStorage.getItem('token');
     
-    // Check 1: Token Existence
     if (!token) {
       router.push('/auth');
       return;
     }
 
     try {
-      // Check 2: Role Verification (Decode JWT)
       const base64Url = token.split('.')[1];
       const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
       const jsonPayload = decodeURIComponent(window.atob(base64).split('').map(function(c) {
@@ -39,17 +36,18 @@ export default function AdminDashboard() {
       const role = (decodedToken.role || "").toUpperCase();
 
       if (role !== "ADMIN") {
-        // If logged in but NOT admin, kick back to deals page
-        console.warn("Unauthorized Access: User is not Admin");
         router.push('/deals');
         return;
       }
 
-      // 3. If Valid Admin, Fetch Data
+      // FETCH PENDING MENUS (As requested: 9.2)
       const fetchRequests = async () => {
         try {
-          const data = await apiRequest('/restaurants/pending');
-          setRequests(data || []);
+          const data = await apiRequest('/admin/menus/pending');
+          // Handle response: assume data.pending_menus contains the list
+          const list = data.pending_menus || data || [];
+          console.log("Fetched pending menus:", list);
+          setRequests(list);
         } catch (err) {
           console.error("Failed to fetch requests", err);
         } finally {
@@ -59,7 +57,6 @@ export default function AdminDashboard() {
       fetchRequests();
 
     } catch (e) {
-      // If token is malformed, force logout
       localStorage.removeItem('token');
       router.push('/auth');
     }
@@ -69,10 +66,19 @@ export default function AdminDashboard() {
     setExpandedId(expandedId === id ? null : id);
   };
 
-  const handleAction = (id: number, action: 'accept' | 'reject') => {
-    // In real app: await apiRequest(`/restaurants/${id}/${action}`, 'PATCH')
-    // Optimistic UI update
-    setRequests(prev => prev.filter(req => req.ID !== id));
+  // --- 2. APPROVE HANDLER ---
+  const handleApprove = async (restaurantId: number, menuId: number) => {
+    try {
+        // ✅ Endpoint: 9.3 Approve Menu
+        // (Instruction: "api for approve takes restaurant id")
+        await apiRequest(`/admin/menus/${restaurantId}/approve`, 'POST');
+        console.log("Menu approved for Restaurant ID:", restaurantId);
+        // Remove from UI on success
+        setRequests(prev => prev.filter(req => req.ID !== menuId));
+    } catch (err) {
+        console.error("Approval failed", err);
+        alert("Failed to approve menu.");
+    }
   };
 
   if (loading) {
@@ -94,8 +100,8 @@ export default function AdminDashboard() {
         <div className="max-w-6xl mx-auto relative z-10">
           <div className="flex justify-between items-start mb-8">
             <div>
-              <h1 className="text-3xl font-bold mb-2">Pending Approvals</h1>
-              <p className="text-white/60 text-sm">Review and manage restaurant requests.</p>
+              <h1 className="text-3xl font-bold mb-2">Menu Approvals</h1>
+              <p className="text-white/60 text-sm">Review uploaded menus and approve for OCR.</p>
             </div>
             <div className="hidden md:flex items-center gap-3 bg-white/10 px-4 py-2 rounded-full border border-white/10 backdrop-blur-md">
               <div className="w-8 h-8 rounded-full bg-[#FFCC00] text-[#2e0561] flex items-center justify-center font-bold text-xs">A</div>
@@ -103,9 +109,8 @@ export default function AdminDashboard() {
             </div>
           </div>
           <div className="flex gap-4">
-            <StatCard value={requests.length} label="Pending" icon={<Clock size={16} className="text-[#FFCC00]" />} />
-            <StatCard value="--" label="Active Partners" icon={<Store size={16} className="text-green-400" />} />
-            <StatCard value="--" label="Growth (Wk)" icon={<TrendingUp size={16} className="text-blue-400" />} />
+            <StatCard value={requests.length} label="Pending Menus" icon={<Clock size={16} className="text-[#FFCC00]" />} />
+            <StatCard value="--" label="Processed Today" icon={<CheckCircle2 size={16} className="text-green-400" />} />
           </div>
         </div>
       </div>
@@ -123,7 +128,7 @@ export default function AdminDashboard() {
                 exit={{ opacity: 0, scale: 0.95 }}
                 className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden"
               >
-                {/* HEADER */}
+                {/* LIST ITEM HEADER (Visible Tile) */}
                 <div 
                   onClick={() => toggleExpand(req.ID)}
                   className="p-6 flex items-center justify-between cursor-pointer hover:bg-slate-50 transition-colors group"
@@ -131,28 +136,46 @@ export default function AdminDashboard() {
                   <div className="flex items-center gap-6">
                     <div className="w-1.5 h-12 rounded-full bg-blue-400" />
                     <div>
-                      <h3 className="text-lg font-bold text-slate-800 group-hover:text-[#471396] transition-colors">{req.Name}</h3>
-                      <div className="flex items-center gap-2 mt-1">
-                        <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-md bg-purple-100 text-purple-700">New Registration</span>
-                        <span className="text-[10px] text-slate-400 flex items-center gap-1"><Clock size={10} /> {new Date(req.CreatedAt).toLocaleDateString()}</span>
+                      {/* 1. RESTAURANT DATA ON TOP TILE */}
+                      <h3 className="text-lg font-bold text-slate-800 group-hover:text-[#471396] transition-colors">
+                        {req.RestaurantName || req.restaurant_name || "Unknown Restaurant"}
+                      </h3>
+                      
+                      <div className="flex items-center gap-3 mt-1.5">
+                        {/* City */}
+                        {(req.City || req.restaurant_city) && (
+                            <span className="text-[11px] font-semibold text-slate-500 flex items-center gap-1">
+                                <MapPin size={12} className="text-slate-400" /> {req.City || req.restaurant_city}
+                            </span>
+                        )}
+                        {/* Cuisine */}
+                        {(req.CuisineType || req.restaurant_cuisine) && (
+                            <span className="text-[11px] font-semibold text-slate-500 flex items-center gap-1 border-l border-slate-200 pl-3">
+                                <Utensils size={12} className="text-slate-400" /> {req.CuisineType || req.restaurant_cuisine}
+                            </span>
+                        )}
                       </div>
                     </div>
                   </div>
 
                   <div className="flex items-center gap-4">
+                     {/* Preview Button */}
                     <button 
-                      onClick={(e) => { e.stopPropagation(); window.open(`/preview?id=${req.ID}`, "_blank"); }}
-                      className="p-2.5 bg-slate-100 text-slate-600 rounded-xl hover:bg-[#2e0561] hover:text-white transition-all"
+                      onClick={(e) => { e.stopPropagation(); window.open(req.object_key || req.url, "_blank"); }}
+                      className="p-2.5 bg-slate-100 text-slate-600 rounded-xl hover:bg-[#2e0561] hover:text-white transition-all flex items-center gap-2 text-xs font-bold"
+                      title="View Menu File"
                     >
-                      <Smartphone size={18} />
+                      <FileText size={18} /> <span className="hidden md:inline">View Menu</span>
                     </button>
+                    
+                    {/* Expand Arrow */}
                     <div className={`p-2 rounded-full transition-transform duration-300 ${expandedId === req.ID ? 'rotate-180 bg-slate-100' : 'text-slate-400'}`}>
                       <ChevronDown size={20} />
                     </div>
                   </div>
                 </div>
 
-                {/* DETAILS */}
+                {/* EXPANDED DETAILS (Accordion) */}
                 {expandedId === req.ID && (
                   <motion.div 
                     initial={{ height: 0, opacity: 0 }}
@@ -162,18 +185,25 @@ export default function AdminDashboard() {
                   >
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-4">
                       <div className="md:col-span-2">
-                        <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Details</h4>
+                        <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Restaurant Details</h4>
                         <div className="grid grid-cols-2 gap-4">
-                             <DetailCard label="City" value={req.City} />
-                             <DetailCard label="Cuisine" value={req.CuisineType} />
-                             <DetailCard label="Owner ID" value={req.OwnerID} />
-                             <DetailCard label="Status" value={req.Status} />
+                             {/* Additional Restaurant Data */}
+                             <DetailCard label="Owner Name" value={req.OwnerName || "N/A"} />
+                             <DetailCard label="Contact" value={req.Phone || "N/A"} />
+                             <DetailCard label="Restaurant ID" value={req.RestaurantID || req.restaurant_id} />
+                             <DetailCard label="Uploaded On" value={new Date(req.CreatedAt || req.created_at).toLocaleDateString()} />
                         </div>
                       </div>
+                      
+                      {/* ACTION AREA - Approve Only */}
                       <div className="flex flex-col justify-end gap-3 border-l border-slate-200 pl-8 border-dashed">
-                        <p className="text-xs font-medium text-slate-500 mb-2">Decision</p>
-                        <button onClick={() => handleAction(req.ID, 'accept')} className="flex items-center justify-center gap-2 w-full py-3 bg-green-500 hover:bg-green-600 text-white rounded-xl font-bold text-xs uppercase tracking-wider transition-all shadow-lg shadow-green-500/20 active:scale-95"><CheckCircle2 size={16} /> Approve</button>
-                        <button onClick={() => handleAction(req.ID, 'reject')} className="flex items-center justify-center gap-2 w-full py-3 bg-white border border-red-100 text-red-500 hover:bg-red-50 rounded-xl font-bold text-xs uppercase tracking-wider transition-all active:scale-95"><XCircle size={16} /> Reject</button>
+                        {/* 3. APPROVE BUTTON - Passes Restaurant ID */}
+                        <button 
+                            onClick={() => handleApprove(req.RestaurantID || req.restaurant_id, req.ID)} 
+                            className="flex items-center justify-center gap-2 w-full py-4 bg-green-500 hover:bg-green-600 text-white rounded-xl font-bold text-sm uppercase tracking-wider transition-all shadow-lg shadow-green-500/20 active:scale-95"
+                        >
+                            <CheckCircle2 size={18} /> Approve Menu
+                        </button>
                       </div>
                     </div>
                   </motion.div>
@@ -186,6 +216,7 @@ export default function AdminDashboard() {
             <div className="text-center py-20 bg-white rounded-3xl border border-dashed border-slate-300">
               <div className="w-16 h-16 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-4 text-green-500"><CheckCircle2 size={32} /></div>
               <h3 className="text-xl font-bold text-slate-800">All Caught Up!</h3>
+              <p className="text-slate-400 text-sm mt-1">No pending menus to review.</p>
             </div>
           )}
         </div>
@@ -203,11 +234,11 @@ function StatCard({ value, label, icon }: any) {
   );
 }
 
-function DetailCard({ label, value }: { label: string, value: string }) {
+function DetailCard({ label, value }: { label: string, value: string | number }) {
   return (
     <div className="bg-white p-3 rounded-lg border border-slate-100">
       <p className="text-[10px] text-slate-400 font-bold uppercase mb-1">{label}</p>
-      <p className="text-sm font-semibold text-slate-800 truncate" title={value}>{value}</p>
+      <p className="text-sm font-semibold text-slate-800 truncate" title={String(value)}>{value}</p>
     </div>
   );
 }
