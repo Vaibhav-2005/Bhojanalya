@@ -52,7 +52,7 @@ export default function RegisterRestaurant() {
   useEffect(() => {
     const init = async () => {
       try {
-        const userData = await apiRequest('/protected/ping');
+        const userData = await apiRequest('/auth/protected/ping');
         setFormData(prev => ({
           ...prev,
           ownerName: userData.name || userData.email.split('@')[0],

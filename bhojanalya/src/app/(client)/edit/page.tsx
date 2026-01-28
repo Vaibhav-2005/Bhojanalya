@@ -23,7 +23,7 @@ export default function EditRestaurantPage() {
         const token = localStorage.getItem('token');
         if (!token) { router.replace("/auth"); return; }
         
-        const userData = await apiRequest('/protected/ping');
+        const userData = await apiRequest('/auth/protected/ping');
         if (!userData) { router.replace("/auth"); return; }
 
         // --- 1. ADMIN CHECK (Case Insensitive) ---

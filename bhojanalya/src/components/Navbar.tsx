@@ -26,7 +26,7 @@ export default function Navbar() {
       const fetchUser = async () => {
         try {
           const storedStatus = localStorage.getItem("approval_status");
-          const userData = await apiRequest('/protected/ping');
+          const userData = await apiRequest('/auth/protected/ping');
           setUser(userData);
           setApprovalStatus(storedStatus || "initiated");
         } catch (err) {}

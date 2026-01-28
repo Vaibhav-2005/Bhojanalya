@@ -111,13 +111,16 @@ export default function AdminDashboard() {
         <div className="max-w-6xl mx-auto relative z-10">
           <div className="flex justify-between items-start mb-8">
             <div>
-              <h1 className="text-3xl font-bold mb-2">Restaurant Requests</h1>
-              <p className="text-white/60 text-sm">Review and manage incoming restaurant registration requests.</p>
+              <h1 className="text-3xl font-bold mb-2">Menu Approvals</h1>
+              <p className="text-white/60 text-sm">Review uploaded menus and approve for OCR.</p>
             </div>
-            {/* Super Admin Button Removed */}
+            <div className="hidden md:flex items-center gap-3 bg-white/10 px-4 py-2 rounded-full border border-white/10 backdrop-blur-md">
+              <div className="w-8 h-8 rounded-full bg-[#FFCC00] text-[#2e0561] flex items-center justify-center font-bold text-xs">A</div>
+              <div className="text-xs"><p className="font-bold">Super Admin</p></div>
+            </div>
           </div>
           <div className="flex gap-4">
-            <StatCard value={requests.length} label="Pending Requests" icon={<Clock size={16} className="text-[#FFCC00]" />} />
+            <StatCard value={requests.length} label="Pending Menus" icon={<Clock size={16} className="text-[#FFCC00]" />} />
             <StatCard value="--" label="Processed Today" icon={<CheckCircle2 size={16} className="text-green-400" />} />
           </div>
         </div>
@@ -237,7 +240,7 @@ export default function AdminDashboard() {
             <div className="text-center py-20 bg-white rounded-3xl border-2 border-dashed border-slate-200">
               <div className="w-16 h-16 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-4 text-green-500"><CheckCircle2 size={32} /></div>
               <h3 className="text-xl font-bold text-slate-800">All Caught Up!</h3>
-              <p className="text-slate-400 text-sm mt-1">No pending restaurant requests.</p>
+              <p className="text-slate-400 text-sm mt-1">No pending menus to review.</p>
             </div>
           )}
         </div>

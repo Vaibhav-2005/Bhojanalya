@@ -127,7 +127,7 @@ export default function DealsPage() {
 
     const fetchData = async () => {
       try {
-        const userData = await apiRequest('/protected/ping');
+        const userData = await apiRequest('/auth/protected/ping');
         if (userData?.role === 'ADMIN' || userData?.isAdmin === true) {
             localStorage.removeItem('token'); 
             router.push('/auth'); 
@@ -205,6 +205,7 @@ export default function DealsPage() {
     }
   };
 
+  // UPDATED: Now uses Session Storage for clean URLs
   const handlePublishDeals = async () => {
     if (draftDeals.length === 0 || !restaurantId) return;
     setIsPublishing(true);
@@ -222,9 +223,15 @@ export default function DealsPage() {
         setDraftDeals([]); 
         setApprovalStatus("pending");
         showToast("Submitted for approval! Redirecting...", "success");
+        
+        // --- UPDATED NAVIGATION LOGIC ---
         setTimeout(() => {
-            router.push(`/preview?id=${restaurantId}`);
+            // 1. Store ID silently
+            sessionStorage.setItem("previewRestaurantId", restaurantId);
+            // 2. Navigate to generic URL
+            router.push("/preview");
         }, 1500);
+
     } catch (error) {
         console.error("Publishing failed:", error);
         showToast("Failed to publish. Try again.", "error");
@@ -232,8 +239,12 @@ export default function DealsPage() {
     } 
   };
 
+  // UPDATED: Uses router.push instead of window.open to maintain Session Storage
   const handlePreviewClick = () => {
-     if (restaurantId) window.open(`/preview?id=${restaurantId}`, '_blank');
+     if (restaurantId) {
+        sessionStorage.setItem("previewRestaurantId", restaurantId);
+        router.push("/preview");
+     }
   };
 
   // --- SORTING LOGIC FOR STATS ---
