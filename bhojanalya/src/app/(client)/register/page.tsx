@@ -1,12 +1,11 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, Suspense } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
-  Utensils, MapPin, Clock, FileText, 
-  ChevronRight, User, CheckCircle2, 
-  Menu as MenuIcon, Loader2
+  Utensils, MapPin, Clock, FileText, ChevronRight, User, CheckCircle2, 
+  Loader2, Image as ImageIcon, X as CloseIcon, UploadCloud, AlertCircle
 } from "lucide-react";
 import { Inter } from "next/font/google";
 import { apiRequest } from "@/lib/api";
@@ -14,407 +13,314 @@ import { apiRequest } from "@/lib/api";
 const inter = Inter({ subsets: ["latin"] });
 
 export default function RegisterRestaurant() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-slate-50 text-[#471396]"><Loader2 className="animate-spin" /></div>}>
+      <RegisterFormContent />
+    </Suspense>
+  );
+}
+
+function RegisterFormContent() {
   const router = useRouter();
-  const [step, setStep] = useState(1);
-  const totalSteps = 6;
   
-  // States
+  // --- UI STATES ---
+  const [step, setStep] = useState(1);
   const [errors, setErrors] = useState<{[key: string]: string}>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [statusMessage, setStatusMessage] = useState("");
-  const [isLoadingUser, setIsLoadingUser] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
+  const [notification, setNotification] = useState<{message: string, type: 'success' | 'error'} | null>(null);
   
-  // Track creation status
-  const [restaurantCreated, setRestaurantCreated] = useState(false);
-  const [createdRestaurantId, setCreatedRestaurantId] = useState<string | number | null>(null);
+  // --- DATABASE STATUS STATE ---
+  const [currentStatus, setCurrentStatus] = useState<string | null>(null); 
+  const [restaurantId, setRestaurantId] = useState<string | number | null>(null);
 
   const menuInputRef = useRef<HTMLInputElement>(null);
+  const photoInputRef = useRef<HTMLInputElement>(null);
 
   const [formData, setFormData] = useState({
-    restaurantName: "", 
-    cuisine: "",
-    ownerName: "", 
-    email: "",     
-    phone: "",
-    address: "", 
-    city: "", 
-    state: "", 
-    zip: "",
-    gstin: "", 
-    fssai: "",
-    openTime: "", 
-    closeTime: "",
-    description: "", 
-    menuFile: null as File | null,
+    restaurantName: "", cuisine: "", ownerName: "", email: "", phone: "",
+    address: "", city: "", state: "", zip: "", 
+    gstin: "", fssai: "", // Display only
+    openTime: "", closeTime: "", description: "", menuFile: null as File | null,
+    photos: [] as File[],
   });
 
-  // 1. Fetch Logged-in User Data AND Check if Restaurant Exists
-  useEffect(() => {
-    const init = async () => {
-      try {
-        const userData = await apiRequest('/auth/protected/ping');
-        setFormData(prev => ({
-          ...prev,
-          ownerName: userData.name || userData.email.split('@')[0],
-          email: userData.email
-        }));
-
-        try {
-          const myRestaurants = await apiRequest('/restaurants/me');
-          if (myRestaurants && myRestaurants.length > 0) {
-            router.replace("/deals");
-            return;
-          }
-        } catch (e) {
-          // Proceed if no restaurant found
-        }
-
-      } catch (err) {
-        console.error("Failed to load user data", err);
-        router.push("/auth"); 
-      } finally {
-        setIsLoadingUser(false);
+  // --- 1. CORE STATUS SYNC ---
+  const fetchStatusAndSync = async () => {
+    try {
+      const myRestaurants = await apiRequest('/restaurants/me');
+      
+      if (!myRestaurants || myRestaurants.length === 0) {
+        setCurrentStatus(null);
+        setStep(1);
+        return;
       }
-    };
-    init();
-  }, [router]);
 
-  // --- Validation ---
+      const res = myRestaurants[0];
+      const status = (res.status || "registered").toLowerCase();
+      const rid = res.ID || res.id;
+      
+      setRestaurantId(rid);
+      setCurrentStatus(status);
+
+      // Routing Logic
+      if (["registered", "menu", "photo"].includes(status)) {
+        setStep(6); 
+      } else if (status === "both") {
+        router.replace("/deals");
+      } else if (status === "completed") {
+        router.replace("/preview");
+      }
+    } catch (err) {
+      console.error("Status check failed", err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!sessionStorage.getItem("nav_intent")) {
+        window.location.href = "/auth";
+        return;
+    }
+    fetchStatusAndSync();
+  }, []);
+
+  const notify = (msg: string, type: 'success' | 'error') => {
+    setNotification({ message: msg, type });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    setTimeout(() => setNotification(null), 5000);
+  };
+
   const validateStep = (currentStep: number) => {
     let newErrors: {[key: string]: string} = {};
-
     if (currentStep === 1) {
-      if (!formData.restaurantName) newErrors.restaurantName = "Restaurant name is required";
-      if (!formData.cuisine) newErrors.cuisine = "Cuisine type is required";
+      if (!formData.restaurantName) newErrors.restaurantName = "Required";
+      if (!formData.cuisine) newErrors.cuisine = "Required";
     }
     if (currentStep === 2) {
-      if (!formData.phone || formData.phone.length !== 10) newErrors.phone = "Valid 10-digit mobile number required";
+      if (!formData.phone || formData.phone.length !== 10) newErrors.phone = "Invalid Phone";
     }
-    if (currentStep === 3) {
-      if (!formData.city) newErrors.city = "City is required";
-      if (!formData.address) newErrors.address = "Address is required";
-      if (!formData.state) newErrors.state = "State is required";
-      if (!formData.zip) newErrors.zip = "Zip Code is required";
-    }
-    if (currentStep === 4) {
-      const gstRegex = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
-      if (formData.gstin && !gstRegex.test(formData.gstin)) newErrors.gstin = "Invalid GSTIN format";
-    }
-    if (currentStep === 5) {
-      if (!formData.description) newErrors.description = "Description is required";
-    }
-
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
-  // --- 1. SUBMIT DATA HANDLER (JSON) ---
-  const submitRestaurantData = async () => {
-    if (restaurantCreated && createdRestaurantId) return createdRestaurantId;
-
-    const payload = {
-      name: formData.restaurantName,
-      cuisine_type: formData.cuisine,
-      description: formData.description,
-      address: formData.address,
-      city: formData.city,
-      state: formData.state,
-      zip_code: formData.zip,
-      opening_time: formData.openTime,
-      closing_time: formData.closeTime,
-      phone: formData.phone,
-      gstin: formData.gstin || undefined,
-      fssai: formData.fssai || undefined
-    };
-
-    const response = await apiRequest('/restaurants', 'POST', payload);
-    
-    // Normalize ID from response (Go might return ID or id)
-    const newId = response.ID || response.id;
-    
-    setRestaurantCreated(true);
-    setCreatedRestaurantId(newId);
-    
-    return newId;
-  };
-
-  // --- 2. SUBMIT FILE HANDLER (With Restaurant ID) ---
-  const submitMenuFile = async (restaurantId: string | number) => {
-    if (!formData.menuFile) return;
-
-    const fileData = new FormData();
-    
-    // 1. Append File
-    fileData.append("menu_file", formData.menuFile);
-    
-    // 2. ✅ Append Restaurant ID
-    fileData.append("restaurant_id", String(restaurantId));
-
-    const token = localStorage.getItem('token');
-    
-    const response = await fetch('/api/menus/upload', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`
-      },
-      body: fileData
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      try {
-        const json = JSON.parse(errorText);
-        throw new Error(json.error || "Upload failed");
-      } catch (e) {
-        throw new Error(`Upload Error: ${errorText}`);
-      }
-    }
-  };
-
-  // --- COMBINED FINAL HANDLER ---
-  const handleCompleteRegistration = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!formData.menuFile) {
-        alert("Please select a menu file to continue.");
-        return;
-    }
-
+  // --- 2. ACTIONS ---
+  const handleRegister = async () => {
+    if (!validateStep(1)) return;
     setIsSubmitting(true);
-
     try {
-        // Step A: Create Restaurant & Get ID
-        setStatusMessage("Creating Restaurant...");
-        const restaurantId = await submitRestaurantData();
-
-        if (!restaurantId) {
-            throw new Error("Failed to retrieve Restaurant ID after creation.");
-        }
-
-        // Step B: Upload Menu (Passing the ID)
-        setStatusMessage("Uploading Menu...");
-        await submitMenuFile(restaurantId);
-
-        // Step C: Success Actions
-        setStatusMessage("Done!");
-        
-        // 1. Open Preview in New Tab
-        window.open(`/preview?id=${restaurantId}`, "_blank");
-
-        // 2. Redirect Current Tab to deals
-        router.push("/deals");
-
-    } catch (err: any) {
-        console.error("Process failed:", err);
-        alert(err.message || "Failed to complete registration.");
-    } finally {
-        setIsSubmitting(false);
-        setStatusMessage("");
-    }
+      await apiRequest('/restaurants', 'POST', {
+        name: formData.restaurantName,
+        cuisine_type: formData.cuisine,
+        short_description: formData.description,
+        address: formData.address,
+        city: formData.city,
+        state: formData.state,
+        zip_code: formData.zip,
+        opens_at: formData.openTime,
+        closes_at: formData.closeTime,
+        phone: formData.phone
+      });
+      await fetchStatusAndSync(); 
+      notify("Restaurant Registered!", "success");
+    } catch (err: any) { notify(err.message, "error"); }
+    finally { setIsSubmitting(false); }
   };
 
-  // --- Navigation Handlers ---
-  const handleNextStep = () => {
-    if (validateStep(step)) {
-      if (step < totalSteps) {
-        setStep(step + 1);
+  const handleUploadMenu = async () => {
+    if (!formData.menuFile || !restaurantId) return;
+    setIsSubmitting(true);
+    try {
+      const data = new FormData();
+      data.append("menu_file", formData.menuFile);
+      data.append("restaurant_id", String(restaurantId));
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/menus/upload`, {
+        method: 'POST', headers: { 'Authorization': `Bearer ${token}` }, body: data
+      });
+      if (res.ok) {
+        await fetchStatusAndSync(); 
+        notify("Menu Uploaded!", "success");
       }
-    }
+    } catch (err) { notify("Upload failed", "error"); }
+    finally { setIsSubmitting(false); }
   };
 
-  const handleBack = () => { if (step > 1) setStep(step - 1); };
-
-  const handleChange = (field: keyof typeof formData, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-    if (errors[field]) setErrors(prev => ({ ...prev, [field]: "" }));
+  const handleUploadPhotos = async () => {
+    if (formData.photos.length === 0 || !restaurantId) return;
+    setIsSubmitting(true);
+    try {
+      const token = localStorage.getItem('token');
+      for (const photo of formData.photos) {
+        const data = new FormData();
+        data.append("images", photo); 
+        await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'}/restaurants/${restaurantId}/images`, {
+          method: 'POST', headers: { 'Authorization': `Bearer ${token}` }, body: data
+        });
+      }
+      await fetchStatusAndSync();
+      notify("Photos Saved!", "success");
+    } catch (err) { notify("Photo upload failed", "error"); }
+    finally { setIsSubmitting(false); }
   };
 
-  const handlePhoneInput = (value: string) => {
-    const numbersOnly = value.replace(/[^0-9]/g, "");
-    if (numbersOnly.length <= 10) handleChange("phone", numbersOnly);
-  };
-
-  const handleMenuUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setFormData(prev => ({ ...prev, menuFile: e.target.files![0] }));
-    }
-  };
-
-  if (isLoadingUser) {
-    return <div className="min-h-screen flex items-center justify-center bg-slate-50 text-slate-500 font-medium">Loading user profile...</div>;
-  }
+  if (isLoading) return <div className="min-h-screen flex items-center justify-center bg-slate-50 text-slate-400 font-bold uppercase tracking-widest text-xs">Loading onboarding...</div>;
 
   return (
     <div className={`min-h-screen bg-slate-50 pb-20 ${inter.className}`}>
       
-      {/* Header Area */}
+      <AnimatePresence>
+        {notification && (
+          <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}
+            className={`fixed top-6 left-1/2 -translate-x-1/2 z-[100] px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-3 font-bold text-sm bg-white border ${notification.type === 'success' ? 'text-green-600 border-green-100' : 'text-red-600 border-red-100'}`}
+          >
+            {notification.type === 'success' ? <CheckCircle2 size={18} /> : <AlertCircle size={18} />}
+            {notification.message}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <div className="bg-[#471396] pt-32 pb-48 px-6 text-center text-white relative">
-        <h1 className="text-4xl md:text-5xl font-bold mb-4 tracking-tight">Register Your Restaurant</h1>
-        <p className="text-purple-200 max-w-lg mx-auto text-lg mb-8">
-          Join the Bhojanalya network. Let's get you set up in minutes.
-        </p>
+        <h1 className="text-4xl md:text-5xl font-bold mb-4 tracking-tight">Onboarding</h1>
         <div className="flex justify-center gap-2 mb-4">
-          {[...Array(totalSteps)].map((_, i) => (
-            <div 
-              key={i} 
-              className={`h-2 rounded-full transition-all duration-300 ${i + 1 === step ? "w-8 bg-[#FFCC00]" : i + 1 < step ? "w-2 bg-[#FFCC00]" : "w-2 bg-purple-800"}`} 
-            />
+          {[...Array(6)].map((_, i) => (
+            <div key={i} className={`h-1.5 rounded-full transition-all duration-500 ${i + 1 === step ? "w-10 bg-[#FFCC00]" : i + 1 < step ? "w-2 bg-[#FFCC00]" : "w-2 bg-purple-800"}`} />
           ))}
         </div>
       </div>
 
-      {/* Form Card */}
-      <motion.div 
-        initial={{ y: 20, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        className="max-w-4xl mx-auto -mt-32 bg-white rounded-3xl shadow-xl shadow-slate-200 border border-slate-100 p-8 md:p-12 relative z-10"
-      >
+      <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="max-w-4xl mx-auto -mt-32 bg-white rounded-[2.5rem] shadow-xl border border-slate-100 p-8 md:p-12 relative z-10">
         <form className="min-h-[450px] flex flex-col">
           <AnimatePresence mode="wait">
-            <motion.div
-              key={step}
-              initial={{ opacity: 0, x: 10 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -10 }}
-              transition={{ duration: 0.2 }}
-              className="flex-grow"
-            >
-              {/* Steps 1-5 (Skipped for brevity - same logic as before) */}
+            <motion.div key={step} initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }} className="flex-grow">
               
               {step === 1 && (
                 <div className="space-y-8">
-                  <StepHeader title="General Information" subtitle="Tell us about your establishment" icon={<Utensils />} />
-                  <div className="grid grid-cols-1 gap-8">
-                    <Input label="Restaurant Name" value={formData.restaurantName} onChange={(e) => handleChange("restaurantName", e.target.value)} error={errors.restaurantName} placeholder="e.g. Royal Spice" />
-                    <Input label="Cuisine Type" value={formData.cuisine} onChange={(e) => handleChange("cuisine", e.target.value)} error={errors.cuisine} placeholder="e.g. North Indian" />
-                  </div>
+                  <StepHeader title="General Information" subtitle="Establishment basics" icon={<Utensils />} />
+                  <Input label="Restaurant Name" value={formData.restaurantName} onChange={(e: any) => setFormData({...formData, restaurantName: e.target.value})} error={errors.restaurantName} />
+                  <Input label="Cuisine Type" value={formData.cuisine} onChange={(e: any) => setFormData({...formData, cuisine: e.target.value})} error={errors.cuisine} />
                 </div>
               )}
 
               {step === 2 && (
                 <div className="space-y-8">
-                  <StepHeader title="Owner Details" subtitle="Auto-filled from your account" icon={<User />} />
-                  <Input label="Owner Full Name" value={formData.ownerName} disabled={true} className="bg-slate-100 text-slate-500 cursor-not-allowed" />
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    <Input label="Mobile Number" value={formData.phone} onChange={(e) => handlePhoneInput(e.target.value)} error={errors.phone} placeholder="9876543210" maxLength={10} />
-                    <Input label="Email ID" value={formData.email} disabled={true} className="bg-slate-100 text-slate-500 cursor-not-allowed" />
+                  <StepHeader title="Owner Details" subtitle="Primary contact information" icon={<User />} />
+                  <Input label="Owner Full Name" value={localStorage.getItem("name") || "Partner"} disabled={true} className="bg-slate-50 text-slate-400" />
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <Input label="Mobile Number" value={formData.phone} onChange={(e: any) => setFormData({...formData, phone: e.target.value.replace(/\D/g,'').slice(0,10)})} error={errors.phone} placeholder="9876543210" />
+                    <Input label="Email ID" value={localStorage.getItem("email") || ""} disabled={true} className="bg-slate-50 text-slate-400" />
                   </div>
                 </div>
               )}
 
               {step === 3 && (
                 <div className="space-y-8">
-                  <StepHeader title="Location" subtitle="Where can customers find you?" icon={<MapPin />} />
-                  <Input label="Street Address" value={formData.address} onChange={(e) => handleChange("address", e.target.value)} error={errors.address} placeholder="Plot No, Street, Landmark" />
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                    <Input label="City" value={formData.city} onChange={(e) => handleChange("city", e.target.value)} error={errors.city} placeholder="Gurugram" />
-                    <Input label="State" value={formData.state} onChange={(e) => handleChange("state", e.target.value)} error={errors.state} placeholder="Haryana" />
-                    <Input label="Zip Code" value={formData.zip} onChange={(e) => handleChange("zip", e.target.value)} error={errors.zip} maxLength={6} placeholder="122001" />
+                  <StepHeader title="Location" subtitle="Address info" icon={<MapPin />} />
+                  <Input label="Street Address" value={formData.address} onChange={(e: any) => setFormData({...formData, address: e.target.value})} />
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <Input label="City" value={formData.city} onChange={(e: any) => setFormData({...formData, city: e.target.value})} />
+                    <Input label="State" value={formData.state} onChange={(e: any) => setFormData({...formData, state: e.target.value})} />
+                    <Input label="Zip Code" value={formData.zip} onChange={(e: any) => setFormData({...formData, zip: e.target.value})} maxLength={6} />
                   </div>
                 </div>
               )}
 
               {step === 4 && (
                 <div className="space-y-8">
-                  <StepHeader title="Legal Documents" subtitle="Compliance information" icon={<FileText />} />
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    <Input label="GSTIN Number" value={formData.gstin} onChange={(e) => handleChange("gstin", e.target.value.toUpperCase())} error={errors.gstin} placeholder="22AAAAA0000A1Z5" />
-                    <Input label="FSSAI License" value={formData.fssai} onChange={(e) => handleChange("fssai", e.target.value)} placeholder="License Number" />
+                  <StepHeader title="Compliance" subtitle="Tax and licensing" icon={<FileText />} />
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <Input label="GSTIN" value={formData.gstin} onChange={(e: any) => setFormData({...formData, gstin: e.target.value.toUpperCase()})} />
+                    <Input label="FSSAI License" value={formData.fssai} onChange={(e: any) => setFormData({...formData, fssai: e.target.value})} />
                   </div>
                 </div>
               )}
 
               {step === 5 && (
                 <div className="space-y-8">
-                  <StepHeader title="Details & Timings" subtitle="Operational hours and description" icon={<Clock />} />
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    <Input label="Opening Time" type="time" value={formData.openTime} onChange={(e) => handleChange("openTime", e.target.value)} />
-                    <Input label="Closing Time" type="time" value={formData.closeTime} onChange={(e) => handleChange("closeTime", e.target.value)} />
+                  <StepHeader title="Operations" subtitle="Operational timings" icon={<Clock />} />
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <Input label="Opening Time" type="time" value={formData.openTime} onChange={(e: any) => setFormData({...formData, openTime: e.target.value})} />
+                    <Input label="Closing Time" type="time" value={formData.closeTime} onChange={(e: any) => setFormData({...formData, closeTime: e.target.value})} />
                   </div>
-                  <div className="relative pt-2">
-                    <label className="text-sm font-bold text-slate-800 mb-1.5 block">Short Description</label>
-                    <textarea className={`w-full px-4 py-4 bg-slate-50 border rounded-xl outline-none transition-all h-32 resize-none text-slate-600 font-semibold placeholder:text-gray-400 placeholder:font-medium ${errors.description ? "border-red-300 bg-red-50" : "border-slate-200 focus:border-[#2E0561]"}`} placeholder="e.g. Authentic flavors from Punjab..." value={formData.description} onChange={(e) => handleChange("description", e.target.value)} />
-                    {errors.description && <span className="text-xs text-red-600 font-bold ml-1">{errors.description}</span>}
+                  <div className="flex flex-col gap-2">
+                    <label className="text-xs font-bold text-slate-800 uppercase tracking-widest ml-1">Short Description</label>
+                    <textarea className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none text-slate-600 font-semibold h-32 resize-none" value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})} />
                   </div>
                 </div>
               )}
 
               {step === 6 && (
                 <div className="space-y-8">
-                  <StepHeader title="Restaurant Menu" subtitle="Upload your menu card" icon={<MenuIcon />} />
-                  <div className="max-w-xl mx-auto flex flex-col gap-6">
-                    
-                    {/* File Selection Area */}
-                    <div 
-                      onClick={() => menuInputRef.current?.click()} 
-                      className={`
-                        border-2 border-dashed rounded-2xl p-10 text-center group flex flex-col items-center justify-center min-h-[250px] relative transition-colors
-                        ${formData.menuFile ? "border-green-200 bg-green-50" : "cursor-pointer border-slate-300 hover:border-[#FFCC00] hover:bg-yellow-50"}
-                      `}
-                    >
-                       <input type="file" ref={menuInputRef} onChange={handleMenuUpload} accept=".pdf,.jpg" className="hidden" />
-                       
-                       <div className={`w-16 h-16 rounded-full flex items-center justify-center mb-6 shadow-sm border ${formData.menuFile ? "bg-green-100 border-green-200" : "bg-white border-slate-200"}`}>
-                          {formData.menuFile ? <CheckCircle2 className="w-8 h-8 text-green-600" /> : <MenuIcon className="w-8 h-8 text-[#FFCC00]" />}
-                       </div>
-                       
-                       {formData.menuFile ? (
-                        <>
-                          <span className="text-slate-900 font-bold text-xl">File Selected</span>
-                          <p className="text-sm text-green-700 font-medium mt-2">{formData.menuFile.name}</p>
-                          <button type="button" className="mt-6 text-xs font-bold text-slate-500 underline hover:text-red-500">Change File</button>
-                        </>
-                       ) : (
-                        <>
-                          <span className="text-slate-900 font-bold text-xl">Select Menu File</span>
-                          <p className="text-sm text-slate-500 mt-3 px-8 leading-relaxed">Supported formats: PDF, JPG, PNG.</p>
-                          <span className="mt-8 text-xs font-bold text-slate-900 bg-[#FFCC00] px-6 py-3 rounded-full shadow-lg shadow-yellow-500/20 group-hover:scale-105 transition-transform">Browse</span>
-                        </>
-                       )}
+                  <StepHeader title="Uploads" subtitle="Finalize setup" icon={<UploadCloud />} />
+                  
+                  {/* Menu Box */}
+                  <div className={`p-6 border rounded-2xl transition-all ${(currentStatus === 'menu' || currentStatus === 'both') ? 'bg-green-50 border-green-200' : 'bg-slate-50 border-slate-100'}`}>
+                    <div className="flex justify-between items-center mb-4">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">1. Menu (Required)</label>
+                        {(currentStatus === 'menu' || currentStatus === 'both') && <CheckCircle2 className="text-green-600" size={16} />}
                     </div>
+                    <div className="flex gap-4">
+                        <div onClick={() => !(currentStatus === 'menu' || currentStatus === 'both') && menuInputRef.current?.click()} className={`flex-1 border-2 border-dashed rounded-2xl p-4 text-center cursor-pointer transition-all bg-white ${(currentStatus === 'menu' || currentStatus === 'both') ? "opacity-40 cursor-default" : "border-slate-200 hover:border-[#FFCC00]"}`}>
+                            <input type="file" ref={menuInputRef} onChange={(e) => setFormData({...formData, menuFile: e.target.files![0]})} accept=".pdf,.jpg" className="hidden" />
+                            <span className="text-sm font-bold text-slate-500 truncate block">{formData.menuFile ? formData.menuFile.name : (currentStatus === 'menu' || currentStatus === 'both') ? "Menu Saved" : "Select PDF/JPG"}</span>
+                        </div>
+                        <button type="button" onClick={handleUploadMenu} disabled={(currentStatus === 'menu' || currentStatus === 'both') || !formData.menuFile || isSubmitting} className="px-6 bg-[#2E0561] text-white rounded-xl font-bold text-xs uppercase disabled:opacity-50">Upload</button>
+                    </div>
+                  </div>
+
+                  {/* Photos Box */}
+                  <div className={`p-6 border rounded-2xl transition-all ${(currentStatus === 'photo' || currentStatus === 'both') ? 'bg-green-50 border-green-200' : 'bg-slate-50 border-slate-100'}`}>
+                    <div className="flex justify-between items-center mb-4">
+                        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">2. Photos (Max 3)</label>
+                        {(currentStatus === 'photo' || currentStatus === 'both') && <CheckCircle2 className="text-green-600" size={16} />}
+                    </div>
+                    <div className="grid grid-cols-4 gap-4 mb-4">
+                        {formData.photos.map((file, idx) => (
+                            <div key={idx} className="relative aspect-square rounded-xl overflow-hidden border border-slate-200">
+                                <img src={URL.createObjectURL(file)} alt="preview" className="w-full h-full object-cover" />
+                                {!(currentStatus === 'photo' || currentStatus === 'both') && <button type="button" onClick={() => setFormData(p => ({...p, photos: p.photos.filter((_, i) => i !== idx)}))} className="absolute top-1.5 right-1.5 bg-red-500 text-white p-1 rounded-full"><CloseIcon size={10} /></button>}
+                            </div>
+                        ))}
+                        {formData.photos.length < 3 && !(currentStatus === 'photo' || currentStatus === 'both') && (
+                            <div onClick={() => photoInputRef.current?.click()} className="aspect-square bg-white border-2 border-dashed border-slate-200 rounded-xl flex items-center justify-center cursor-pointer hover:border-[#FFCC00]">
+                                <input type="file" ref={photoInputRef} onChange={(e) => e.target.files && setFormData(p => ({...p, photos: [...p.photos, ...Array.from(e.target.files!)]}))} accept=".jpg,.png" className="hidden" multiple />
+                                <ImageIcon className="text-slate-300" />
+                            </div>
+                        )}
+                    </div>
+                    <button type="button" onClick={handleUploadPhotos} disabled={(currentStatus === 'photo' || currentStatus === 'both') || formData.photos.length === 0 || isSubmitting} className="w-full py-3.5 bg-[#2E0561] text-white rounded-xl font-bold text-xs uppercase disabled:opacity-50">Save Photos</button>
                   </div>
                 </div>
               )}
             </motion.div>
           </AnimatePresence>
 
-          {/* Navigation Buttons */}
           <div className="mt-12 pt-8 border-t border-slate-100 flex items-center justify-between">
-            {step > 1 ? (
-              <button 
-                type="button" 
-                onClick={handleBack} 
-                disabled={isSubmitting} 
-                className="px-6 py-3 text-slate-600 font-bold hover:bg-slate-100 rounded-lg transition-colors disabled:opacity-50"
-              >
-                Back
-              </button>
-            ) : <div />}
+            {step > 1 && step < 6 && (
+                <button type="button" onClick={() => setStep(step - 1)} className="px-8 py-3 text-slate-400 font-bold hover:text-slate-800 transition-colors">Back</button>
+            )}
             
-            {step < totalSteps ? (
-                <button 
-                  onClick={handleNextStep}
-                  type="button"
-                  className="px-8 py-3 bg-[#FFCC00] text-[#2E0561] font-bold rounded-lg hover:bg-[#ffdb4d] flex items-center gap-2 shadow-lg shadow-yellow-500/20"
-                >
-                  Continue <ChevronRight className="w-4 h-4" />
+            {step < 5 && (
+                <button type="button" onClick={() => validateStep(step) && setStep(step + 1)} className="ml-auto px-10 py-3.5 bg-[#FFCC00] text-[#2E0561] font-bold rounded-2xl hover:bg-[#ffdb4d] flex gap-2 items-center shadow-lg transition-all active:scale-95">
+                    Continue <ChevronRight size={18} />
                 </button>
-            ) : (
+            )}
+
+            {step === 5 && (
+                <button type="button" onClick={handleRegister} disabled={isSubmitting} className="ml-auto px-10 py-3.5 bg-[#FFCC00] text-[#2E0561] font-bold rounded-2xl hover:bg-[#ffdb4d] flex gap-2 items-center shadow-lg active:scale-95">
+                    {isSubmitting ? <Loader2 className="animate-spin" /> : <>Register <ChevronRight size={18} /></>}
+                </button>
+            )}
+
+            {step === 6 && (
                 <button 
-                  onClick={handleCompleteRegistration}
-                  disabled={isSubmitting || !formData.menuFile} 
-                  className={`
-                    px-8 py-3 rounded-lg font-bold flex items-center gap-2 shadow-lg transition-all
-                    ${(!formData.menuFile || isSubmitting)
-                      ? "bg-slate-200 text-slate-400 cursor-not-allowed shadow-none" 
-                      : "bg-[#FFCC00] text-[#2E0561] hover:bg-[#ffdb4d] shadow-yellow-500/20"}
-                  `}
+                  type="button" 
+                  onClick={() => fetchStatusAndSync()} 
+                  disabled={currentStatus !== 'both'} 
+                  className="w-full py-4 bg-green-600 text-white font-bold rounded-2xl hover:bg-green-700 flex justify-center gap-2 items-center shadow-xl disabled:opacity-50 transition-all active:scale-[0.99]"
                 >
-                  {isSubmitting ? (
-                    <><Loader2 className="w-4 h-4 animate-spin" /> {statusMessage || "Processing..."}</>
-                  ) : (
-                    <>Complete Registration <ChevronRight className="w-4 h-4" /></>
-                  )}
+                    Finish & Go to Deals <CheckCircle2 size={18} />
                 </button>
             )}
           </div>
@@ -424,33 +330,27 @@ export default function RegisterRestaurant() {
   );
 }
 
-// --- Reusable Sub-Components ---
-function StepHeader({ title, subtitle, icon }: { title: string; subtitle: string; icon: React.ReactNode }) {
+// Symmetrical Header
+function StepHeader({ title, subtitle, icon }: any) {
   return (
-    <div className="mb-6">
-      <div className="flex items-center gap-3 text-[#2E0561] mb-2">
-        <div className="p-2.5 bg-purple-100 rounded-lg">
-          {icon}
-        </div>
-        <h2 className="text-2xl font-bold">{title}</h2>
+    <div className="flex items-start gap-5 mb-10">
+      <div className="p-3.5 bg-purple-50 rounded-2xl text-[#2E0561] shrink-0 shadow-sm border border-purple-100 flex items-center justify-center">
+        {React.cloneElement(icon, { size: 24 })}
       </div>
-      <p className="text-slate-500 ml-12">{subtitle}</p>
+      <div className="flex flex-col gap-1 mt-0.5 text-left">
+        <h2 className="text-2xl font-black text-[#2E0561] leading-tight tracking-tight">{title}</h2>
+        <p className="text-slate-400 font-semibold text-sm">{subtitle}</p>
+      </div>
     </div>
   );
 }
 
-interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
-  label: string;
-  error?: string;
-  className?: string;
-}
-
-function Input({ label, error, className, ...props }: InputProps) {
+function Input({ label, error, className, ...props }: any) {
   return (
-    <div className="flex flex-col gap-1.5 w-full">
-      <label className="text-sm font-bold text-slate-800 ml-1">{label}</label>
-      <input className={`w-full px-4 py-3.5 bg-slate-50 border rounded-xl outline-none transition-all text-slate-600 font-semibold placeholder:text-gray-400 placeholder:font-medium ${error ? "border-red-300 bg-red-50" : "border-slate-200 focus:border-[#2E0561]"} ${className}`} {...props} />
-      {error && <span className="text-xs text-red-600 font-bold ml-1">{error}</span>}
+    <div className="flex flex-col gap-2 w-full text-left">
+      <label className="text-[10px] font-black text-slate-800 uppercase tracking-widest ml-1">{label}</label>
+      <input className={`w-full px-5 py-4 bg-slate-50 border rounded-2xl outline-none transition-all text-slate-700 font-bold placeholder:text-slate-300 border-slate-100 focus:border-[#2E0561] focus:bg-white ${className}`} {...props} />
+      {error && <span className="text-[10px] text-red-500 font-black uppercase tracking-tight ml-1">{error}</span>}
     </div>
   );
 }

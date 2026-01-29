@@ -1,11 +1,11 @@
-// app/preview/page.tsx
 "use client";
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { 
   Heart, Share2, MapPin, Clock, Phone, Percent, 
-  ShoppingBag, X, Loader2, FileText, ChevronRight
+  ShoppingBag, X, Loader2, FileText, ChevronRight,
+  Plane, AlertCircle 
 } from "lucide-react";
 import { apiRequest } from "@/lib/api"; 
 
@@ -28,8 +28,9 @@ interface BackendResponse {
   CuisineType: string;
   CostForTwo: number;
   Images: string[];
-  Description?: string;
-  Time?: string;
+  short_description?: string;
+  opens_at?: string;
+  closes_at?: string;
   deals: BackendDeal[];
   menu_pdfs: string[] | string; 
 }
@@ -68,42 +69,73 @@ export default function PreviewShop() {
     }
   };
 
-  // --- HELPER: Capitalize First Letter ---
   const capitalize = (str: string) => {
     if (!str) return "";
     return str.charAt(0).toUpperCase() + str.slice(1);
   };
 
-  // --- HELPER: Dynamic Font Size for Restaurant Name ---
   const getTitleClass = (name: string) => {
      if (name.length > 25) return "text-sm";   
      if (name.length > 15) return "text-base"; 
      return "text-xl";                         
   };
 
+  // --- 1. STATE MACHINE & DATA FETCHING ---
   useEffect(() => {
+    // SECURITY GUARD: Prevent direct URL access
+    const navAllowed = sessionStorage.getItem("nav_intent");
+    if (!navAllowed) {
+        window.location.href = "/auth";
+        return;
+    }
+
     const fetchPreview = async () => {
       try {
-        const id = sessionStorage.getItem("previewRestaurantId");
-        if (!id) throw new Error("No restaurant selected.");
+        // Step A: Identify Restaurant
+        const myRestaurants = await apiRequest('/restaurants/me');
+        if (!myRestaurants || myRestaurants.length === 0) {
+            router.replace("/register");
+            return;
+        }
 
-        const data: BackendResponse = await apiRequest(`/restaurants/${id}/preview`);
+        const rid = myRestaurants[0].ID || myRestaurants[0].id;
 
-        if (!data) throw new Error("No data received");
+        // Step B: Fetch Detail & Check Completeness
+        let data: BackendResponse;
+        try {
+            data = await apiRequest(`/restaurants/${rid}/preview`);
+        } catch (err: any) {
+            // If deals are missing, the API throws an error
+            if (err.message?.toLowerCase().includes("at least one deal exists")) {
+                router.replace("/deals");
+                return;
+            }
+            throw err;
+        }
 
-        // --- MAPPING LOGIC ---
+        // --- THE FIX: ENFORCE LOGIC SEQUENCE ---
+        const hasImages = data.Images && data.Images.length > 0;
+        const hasMenu = data.menu_pdfs && (Array.isArray(data.menu_pdfs) ? data.menu_pdfs.length > 0 : data.menu_pdfs !== "");
+        const hasDeals = data.deals && data.deals.length > 0;
 
-        // 1. Deals
+        // 1. Check for missing uploads first
+        if (!hasImages || !hasMenu) {
+            sessionStorage.setItem("incomplete_rid", rid.toString());
+            router.replace("/register?step=upload");
+            return;
+        }
+
+        // 2. Check for missing deals
+        if (!hasDeals) {
+            router.replace("/deals");
+            return;
+        }
+
+        // --- 3. MAPPING UI STATE ---
         const mappedDeals: UIDeal[] = (data.deals || []).map((d, i) => {
           const val = d.DiscountValue || d.discount_value || 0;
           const type = (d.Type || d.type || "PERCENTAGE").toUpperCase();
-          
-          const colors = [
-            "from-blue-600 to-blue-400",
-            "from-purple-600 to-purple-400",
-            "from-orange-500 to-yellow-400",
-            "from-emerald-600 to-emerald-400"
-          ];
+          const colors = ["from-blue-600 to-blue-400", "from-purple-600 to-purple-400", "from-orange-500 to-yellow-400", "from-emerald-600 to-emerald-400"];
 
           return {
             code: type === "FLAT" ? `FLAT${val}` : `${val}%OFF`,
@@ -113,32 +145,19 @@ export default function PreviewShop() {
           };
         });
 
-        // 2. Images
-        const validImages = (data.Images || []).filter(img => img && img.length > 0);
-        if (validImages.length === 0) {
-            validImages.push("https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?q=80&w=1000");
-        }
-
-        // 3. Menu Link
-        let menuLink = null;
-        if (Array.isArray(data.menu_pdfs)) {
-             if (data.menu_pdfs.length > 0) menuLink = data.menu_pdfs[0];
-        } else if (typeof data.menu_pdfs === 'string') {
-             menuLink = data.menu_pdfs;
-        }
-
-        // 4. Timings
-        const timings = data.Time || "11:00 AM - 11:00 PM";
+        const timings = (data.opens_at && data.closes_at) 
+            ? `${data.opens_at} - ${data.closes_at}` 
+            : "11:00 AM - 11:00 PM";
 
         setRestaurant({
           name: data.Name, 
           cuisine: capitalize(data.CuisineType) || "Multi-Cuisine", 
           address: capitalize(data.City), 
           time: timings,
-          description: data.Description || `Welcome to ${data.Name}. We serve delicious ${data.CuisineType || 'food'} in ${capitalize(data.City)}.`,
-          images: validImages,
+          description: data.short_description || `Welcome to ${data.Name}.`,
+          images: data.Images,
           deals: mappedDeals,
-          menuLink: menuLink
+          menuLink: Array.isArray(data.menu_pdfs) ? data.menu_pdfs[0] : (data.menu_pdfs || null)
         });
 
       } catch (err: any) {
@@ -150,9 +169,8 @@ export default function PreviewShop() {
     };
 
     fetchPreview();
-  }, []);
+  }, [router]);
 
-  // --- SLIDESHOW EFFECT ---
   useEffect(() => {
     if (!restaurant || restaurant.images.length <= 1) return;
     const interval = setInterval(() => {
@@ -162,30 +180,34 @@ export default function PreviewShop() {
   }, [restaurant]);
 
   if (loading) return (
-      <div className="fixed inset-0 h-screen w-screen bg-slate-900/95 flex items-center justify-center z-50">
-        <Loader2 className="text-[#471396] animate-spin" size={48} />
+      <div className="fixed inset-0 h-screen w-screen bg-slate-900/95 flex flex-col items-center justify-center z-50 gap-4">
+        <Loader2 className="text-[#FFCC00] animate-spin" size={48} />
+        <span className="text-white/50 text-[10px] font-bold uppercase tracking-widest">Validating State...</span>
       </div>
   );
 
   if (error || !restaurant) return (
       <div className="fixed inset-0 h-screen w-screen bg-slate-900 flex items-center justify-center z-50 p-4">
-        <div className="bg-white p-6 rounded-2xl max-w-sm text-center">
-            <h3 className="text-red-600 font-bold mb-2">Unavailable</h3>
-            <p className="text-slate-500 text-sm mb-4">{error}</p>
-            <button onClick={handleClose} className="bg-slate-900 text-white px-6 py-2 rounded-full text-sm font-bold">Go Back</button>
+        <div className="bg-white p-8 rounded-[2rem] max-w-sm text-center shadow-2xl">
+            <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center text-red-600 mx-auto mb-4">
+                <AlertCircle size={24} />
+            </div>
+            <h3 className="text-slate-900 font-black mb-2 uppercase tracking-tight">Access Restricted</h3>
+            <p className="text-slate-500 text-xs mb-6 leading-relaxed">We couldn't verify your restaurant state. Please return to the dashboard.</p>
+            <button onClick={handleClose} className="w-full bg-[#471396] text-white py-3 rounded-xl text-xs font-bold uppercase tracking-widest active:scale-95 transition-all">Go Back</button>
         </div>
       </div>
   );
 
   return (
-    <div className="fixed inset-0 h-screen w-screen bg-slate-900/95 flex items-center justify-center backdrop-blur-sm overflow-hidden z-50">
+    <div className="fixed inset-0 h-screen w-screen bg-slate-900/95 flex items-center justify-center backdrop-blur-sm overflow-hidden z-50 font-sans">
       
       <style jsx global>{`
         .scrollbar-hide::-webkit-scrollbar { display: none; }
         .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
       `}</style>
 
-      {/* Close Button (Desktop Only) */}
+      {/* Desktop Close Button */}
       <button 
         onClick={handleClose}
         className="absolute top-6 right-6 p-3 bg-white/10 text-white rounded-full hover:bg-white/20 transition-all z-50 group cursor-pointer"
@@ -193,152 +215,117 @@ export default function PreviewShop() {
         <X size={24} className="group-hover:rotate-90 transition-transform" />
       </button>
 
-      <div className="text-white absolute top-6 left-8 hidden md:block">
-        <h1 className="text-2xl font-bold">Live Preview</h1>
-        <p className="text-white/50 text-sm">Visualizing data for {restaurant.name}</p>
-      </div>
-
-      {/* --- PHONE CONTAINER --- */}
-      <div className="relative w-[390px] h-[800px] max-h-[95vh] bg-white rounded-[3rem] border-[8px] border-slate-900 shadow-2xl overflow-hidden flex flex-col font-sans shrink-0">
+      {/* PHONE CONTAINER */}
+      <div className="relative w-[390px] h-[800px] max-h-[95vh] bg-white rounded-[3rem] border-[10px] border-slate-800 shadow-2xl overflow-hidden flex flex-col shrink-0">
         
-        {/* Status Bar */}
-        <div className="absolute top-0 w-full h-8 bg-black/20 z-30 flex justify-between px-6 items-center backdrop-blur-md pointer-events-none">
-           <span className="text-[10px] font-bold text-white">9:41</span>
-           <div className="flex gap-1.5">
-             <div className="w-3 h-3 bg-white rounded-full opacity-80" />
-             <div className="w-3 h-3 bg-white rounded-full opacity-80" />
+        {/* STATUS BAR */}
+        <div className="absolute top-0 w-full h-8 bg-black/5 z-30 flex justify-between px-8 items-center backdrop-blur-sm pointer-events-none">
+           <div className="flex items-center gap-1.5">
+             <Plane size={10} className="text-slate-900 fill-slate-900 rotate-45" />
+             <span className="text-[10px] font-black text-slate-900">9:41</span>
+           </div>
+           <div className="flex gap-1.5 items-center">
+             <div className="w-4 h-2 border border-slate-900/30 rounded-sm" />
+             <div className="w-1.5 h-1.5 bg-slate-900 rounded-full opacity-80" />
            </div>
         </div>
 
-        {/* --- CONTENT --- */}
+        {/* CONTENT */}
         <div className="flex-1 overflow-y-auto pb-20 scrollbar-hide">
           
-          {/* 1. Header Slideshow */}
-          <div className="relative h-64 bg-slate-200 overflow-hidden group">
+          {/* Header Slideshow */}
+          <div className="relative h-[300px] bg-slate-200 overflow-hidden">
             <div 
-              className="absolute inset-0 bg-cover bg-center transition-all duration-1000 ease-in-out transform scale-105"
+              className="absolute inset-0 bg-cover bg-center transition-all duration-1000 ease-in-out"
               style={{ backgroundImage: `url('${restaurant.images[currentImageIndex]}')` }}
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-black/30" />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/20" />
             
             {restaurant.images.length > 1 && (
-                <div className="absolute bottom-20 left-1/2 -translate-x-1/2 flex gap-1 z-20">
+                <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-1.5 z-20">
                     {restaurant.images.map((_, idx) => (
-                        <div key={idx} className={`w-1.5 h-1.5 rounded-full transition-all ${idx === currentImageIndex ? 'bg-white w-3' : 'bg-white/40'}`} />
+                        <div key={idx} className={`w-1.5 h-1.5 rounded-full transition-all ${idx === currentImageIndex ? 'bg-white w-4' : 'bg-white/40'}`} />
                     ))}
                 </div>
             )}
 
-            <div className="absolute top-10 right-5 flex gap-3 text-white z-20">
-               <button className="p-2 bg-white/20 backdrop-blur-md rounded-full hover:bg-white/30"><Share2 size={20} /></button>
-               <button className="p-2 bg-white/20 backdrop-blur-md rounded-full hover:bg-white/30"><Heart size={20} /></button>
-            </div>
-
-            <div className="absolute bottom-0 w-full p-5 text-white z-20">
-              {/* Dynamic Restaurant Name Font Size */}
-              <h1 className={`${getTitleClass(restaurant.name)} capitalize font-black leading-tight mb-1 shadow-sm break-words`}>
+            <div className="absolute bottom-0 w-full p-6 text-white z-20">
+              <h1 className={`${getTitleClass(restaurant.name)} capitalize font-black leading-tight mb-1`}>
                   {restaurant.name}
               </h1>
-              <p className="text-sm text-white/90 font-medium capitalize">{restaurant.cuisine}</p>
+              <p className="text-xs text-white/80 font-bold uppercase tracking-widest">{restaurant.cuisine}</p>
             </div>
           </div>
 
-          {/* 2. Info Bar */}
-          <div className="px-5 py-4 border-b border-slate-50 flex justify-between items-center bg-white">
-             <div className="flex flex-col gap-1">
-                <div className="flex items-center gap-1.5 text-slate-800 font-bold text-xs">
-                   <MapPin size={14} className="text-[#471396]" /> <span className="capitalize">{restaurant.address}</span>
+          {/* Info Bar */}
+          <div className="px-6 py-5 border-b border-slate-50 flex justify-between items-center bg-white">
+             <div className="flex flex-col gap-1.5">
+                <div className="flex items-center gap-2 text-slate-900 font-bold text-xs">
+                   <MapPin size={14} className="text-[#471396]" /> {restaurant.address}
                 </div>
-                <div className="flex items-center gap-1.5 text-slate-500 font-medium text-[10px] ml-0.5">
+                <div className="flex items-center gap-2 text-slate-400 font-bold text-[10px] uppercase tracking-wider">
                    <Clock size={12} /> {restaurant.time}
                 </div>
              </div>
-             <button className="w-9 h-9 bg-slate-100 rounded-full flex items-center justify-center text-[#471396]">
-               <Phone size={16} />
+             <button className="w-10 h-10 bg-slate-50 rounded-full flex items-center justify-center text-[#471396] shadow-sm active:scale-90 transition-transform">
+               <Phone size={18} />
              </button>
           </div>
 
-          {/* 3. Deals Section */}
-          <div className="py-6 border-b border-slate-50 bg-slate-50/50">
-             <div className="flex items-center gap-2 px-5 mb-3">
+          {/* Deals */}
+          <div className="py-8 bg-slate-50/50 border-b border-slate-100">
+             <div className="flex items-center gap-2 px-6 mb-4">
                <Percent size={16} className="text-[#471396]" />
-               <h3 className="font-black text-sm text-slate-800 uppercase tracking-wide">Exclusive Deals</h3>
+               <h3 className="font-black text-[10px] text-slate-400 uppercase tracking-[0.2em]">Exclusive Deals</h3>
              </div>
              
-             {restaurant.deals.length > 0 ? (
-               <div className="flex overflow-x-auto gap-4 px-5 pb-2 scrollbar-hide snap-x">
-                 {restaurant.deals.map((deal, i) => (
-                   <div key={i} className={`min-w-[240px] h-28 rounded-2xl p-4 flex flex-col justify-between text-white shadow-lg bg-gradient-to-br ${deal.color} snap-center`}>
-                      <div className="flex justify-between items-start">
-                         <div className="bg-white/20 backdrop-blur-sm px-2 py-1 rounded text-[10px] font-bold tracking-widest uppercase">{deal.code}</div>
-                         <ShoppingBag size={16} className="opacity-50" />
-                      </div>
-                      <div>
-                         {/* UPDATED: Title font size reduced to text-base */}
-                         <p className="font-black text-base">{deal.title}</p>
-                         <p className="text-[10px] opacity-90 font-medium truncate">{deal.desc}</p>
-                      </div>
-                   </div>
-                 ))}
-               </div>
-             ) : (
-               <div className="px-5 py-4 text-center text-xs text-slate-400 italic bg-white mx-5 rounded-xl border border-dashed border-slate-200">
-                  No active deals found
-               </div>
-             )}
+             <div className="flex overflow-x-auto gap-4 px-6 pb-2 scrollbar-hide snap-x">
+               {restaurant.deals.map((deal, i) => (
+                 <div key={i} className={`min-w-[260px] h-32 rounded-[1.5rem] p-5 flex flex-col justify-between text-white shadow-xl bg-gradient-to-br ${deal.color} snap-center`}>
+                    <div className="flex justify-between items-start">
+                       <div className="bg-white/20 backdrop-blur-md px-2 py-1 rounded-lg text-[10px] font-black tracking-tighter uppercase">{deal.code}</div>
+                       <ShoppingBag size={18} className="opacity-40" />
+                    </div>
+                    <div>
+                       <p className="font-black text-lg leading-tight">{deal.title}</p>
+                       <p className="text-[10px] opacity-80 font-bold truncate uppercase tracking-wide">{deal.desc}</p>
+                    </div>
+                 </div>
+               ))}
+             </div>
           </div>
 
-          {/* 4. Description */}
-          <div className="p-5">
-             <h3 className="font-bold text-slate-900 mb-2">About Us</h3>
-             <p className="text-xs text-slate-500 leading-relaxed">
+          {/* Description */}
+          <div className="p-6">
+             <h3 className="font-black text-[10px] text-slate-400 uppercase tracking-[0.2em] mb-3">The Experience</h3>
+             <p className="text-xs text-slate-600 font-medium leading-relaxed">
                {restaurant.description}
              </p>
           </div>
 
-          {/* 5. Menu Link */}
-          <div className="px-5 pb-8">
-            <h3 className="font-bold text-slate-900 mb-3">Menu</h3>
-            
+          {/* Menu Section */}
+          <div className="px-6 pb-12">
+            <h3 className="font-black text-[10px] text-slate-400 uppercase tracking-[0.2em] mb-4">Digital Menu</h3>
             {restaurant.menuLink ? (
                 <a 
                   href={restaurant.menuLink} 
                   target="_blank" 
                   rel="noopener noreferrer"
-                  className="flex items-center justify-between p-4 bg-white border border-slate-200 rounded-2xl shadow-sm hover:border-[#471396] hover:shadow-md transition-all group"
+                  className="flex items-center justify-between p-5 bg-white border border-slate-100 rounded-2xl shadow-sm hover:border-[#471396] transition-all group active:scale-[0.98]"
                 >
-                   <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center text-[#471396] group-hover:bg-[#471396] group-hover:text-white transition-colors">
-                          <FileText size={20} />
+                   <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 rounded-xl bg-[#471396]/5 flex items-center justify-center text-[#471396] group-hover:bg-[#471396] group-hover:text-white transition-all">
+                          <FileText size={22} />
                       </div>
                       <div>
-                          <p className="text-sm font-bold text-slate-800">Full Menu</p>
-                          <p className="text-[10px] text-slate-400">View PDF / Image</p>
+                          <p className="text-sm font-black text-slate-900">View Full Menu</p>
+                          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tight">PDF • Instant View</p>
                       </div>
                    </div>
-                   <div className="w-8 h-8 rounded-full bg-slate-50 flex items-center justify-center group-hover:bg-slate-100">
-                       <ChevronRight size={16} className="text-slate-400 group-hover:text-slate-600" />
-                   </div>
+                   <ChevronRight size={18} className="text-slate-300 group-hover:text-[#471396] transition-colors" />
                 </a>
-            ) : (
-                <div className="p-4 bg-slate-50 rounded-2xl text-center text-xs text-slate-400 italic">
-                    Menu unavailable
-                </div>
-            )}
+            ) : null}
           </div>
-        </div>
-
-        {/* --- BOTTOM BAR --- */}
-        <div className="absolute bottom-0 w-full bg-white border-t border-slate-100 p-4 pb-8 z-20 shadow-[0_-5px_20px_rgba(0,0,0,0.05)]">
-           <div className="bg-[#471396] rounded-xl p-3.5 flex items-center justify-between text-white shadow-xl shadow-purple-900/20 active:scale-[0.98] transition-transform cursor-pointer">
-              <div className="flex flex-col pl-2">
-                 <span className="text-[10px] font-medium opacity-80 uppercase tracking-wider">Total</span>
-                 <span className="font-bold text-sm">₹0.00</span>
-              </div>
-              <div className="flex items-center gap-2 font-bold text-sm pr-2">
-                 View Cart <ChevronRight size={16} />
-              </div>
-           </div>
         </div>
 
         {/* Home Indicator */}
