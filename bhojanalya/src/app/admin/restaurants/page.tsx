@@ -3,9 +3,10 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { 
-  Search, MapPin, MoreHorizontal, Filter, 
-  Smartphone, Loader2, AlertCircle 
+  Search, MapPin, Filter, 
+  Smartphone, Loader2, AlertCircle, Utensils
 } from "lucide-react";
+import { apiRequest } from "@/lib/api";
 
 export default function RestaurantDirectory() {
   const router = useRouter();
@@ -14,70 +15,37 @@ export default function RestaurantDirectory() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
 
+  // --- AUTH & DATA FETCHING ---
   useEffect(() => {
     const token = localStorage.getItem('token');
-
     if (!token) {
       router.push('/auth');
       return;
     }
 
-    try {
-      const base64Url = token.split('.')[1];
-      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-      const jsonPayload = decodeURIComponent(window.atob(base64).split('').map(function(c) {
-          return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
-      }).join(''));
-
-      const decodedToken = JSON.parse(jsonPayload);
-      const role = (decodedToken.role || "").toUpperCase();
-
-      if (role !== "ADMIN") {
-        router.push('/deals'); 
-        return;
+    const fetchData = async () => {
+      try {
+        // Using your standardized apiRequest helper
+        const data = await apiRequest('/admin/restaurants/approved', 'GET');
+        setRestaurants(data || []);
+      } catch (err: any) {
+        console.error("Directory fetch failed:", err.message);
+        setRestaurants([]);
+      } finally {
+        setLoading(false);
       }
+    };
 
-      const fetchData = async () => {
-        try {
-          // --- THE FIX: Use the full backend URL ---
-          const baseUrl = process.env.NEXT_PUBLIC_API_URL;
-          const response = await fetch(`${baseUrl}/admin/restaurants/approved`, {
-            method: 'GET',
-            headers: {
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json'
-            }
-          });
-          
-          if (!response.ok) throw new Error(`Server Error: ${response.status}`);
-          
-          // Use text() first to safely handle empty responses
-          const text = await response.text();
-          const data = text ? JSON.parse(text) : [];
-          console.log("Fetched Restaurants:", data);
-          
-          setRestaurants(data || []);
-        } catch (err: any) {
-          console.error("Directory fetch failed:", err.message);
-          setRestaurants([]);
-        } finally {
-          setLoading(false);
-        }
-      };
-
-      fetchData();
-
-    } catch (e) {
-      localStorage.removeItem('token');
-      router.push('/auth');
-    }
+    fetchData();
   }, [router]);
 
+  // Filtering Logic
   const filtered = restaurants.filter(r => {
     const name = (r.name || r.Name || "").toLowerCase();
-    const location = (r.city || r.City || "").toLowerCase();
+    const city = (r.city || r.City || "").toLowerCase();
+    const cuisine = (r.cuisine_type || r.CuisineType || "").toLowerCase();
     const search = searchTerm.toLowerCase();
-    return name.includes(search) || location.includes(search);
+    return name.includes(search) || city.includes(search) || cuisine.includes(search);
   });
 
   const openPreview = (id: string | number) => {
@@ -88,8 +56,8 @@ export default function RestaurantDirectory() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#F8F9FB]">
         <div className="flex flex-col items-center gap-4">
-          <Loader2 className="w-8 h-8 animate-spin text-[#471396]" />
-          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Verifying Admin Access...</p>
+          <Loader2 className="w-10 h-10 animate-spin text-[#471396]" />
+          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Loading Directory...</p>
         </div>
       </div>
     );
@@ -98,81 +66,64 @@ export default function RestaurantDirectory() {
   return (
     <div className="min-h-screen bg-[#F8F9FB] font-sans pb-20">
       <div className="max-w-7xl mx-auto px-8 py-12">
-        <div className="flex justify-between items-end mb-8">
+        
+        {/* HEADER SECTION */}
+        <div className="flex justify-between items-end mb-10">
           <div>
-            <h1 className="text-3xl font-bold text-slate-900">Restaurants</h1>
-            <p className="text-slate-500 text-sm mt-1">Manage all registered establishments.</p>
+            <h1 className="text-4xl font-black text-slate-900 tracking-tight">Active Partners</h1>
+            <p className="text-slate-500 text-sm mt-2 font-medium">Browse and manage all live establishments on the platform.</p>
           </div>
           
           <div className="flex gap-3">
-            <div className="flex items-center gap-2 bg-white px-4 py-2.5 rounded-xl border border-slate-200 shadow-sm">
-              <Search size={16} className="text-slate-400" />
+            <div className="flex items-center gap-3 bg-white px-5 py-3 rounded-[1.25rem] border border-slate-200 shadow-sm focus-within:ring-2 focus-within:ring-indigo-100 transition-all">
+              <Search size={18} className="text-slate-400" />
               <input 
                 type="text" 
-                placeholder="Search restaurants..." 
-                className="bg-transparent text-sm font-medium outline-none w-48 placeholder:text-slate-300" 
+                placeholder="Filter by name, city..." 
+                className="bg-transparent text-sm font-bold outline-none w-60 placeholder:text-slate-300" 
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
-            <button className="p-2.5 bg-white border border-slate-200 rounded-xl text-slate-600 hover:bg-slate-50">
-              <Filter size={18} />
-            </button>
           </div>
         </div>
 
-        <div className="bg-white rounded-[1.5rem] border border-slate-200 shadow-sm overflow-hidden">
-          <table className="w-full text-left">
-            <thead className="bg-slate-50/50 border-b border-slate-200 text-xs font-bold text-slate-400 uppercase tracking-wider">
+        {/* TABLE CONTAINER */}
+        <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-xl shadow-slate-200/50 overflow-hidden">
+          <table className="w-full text-left border-collapse">
+            <thead className="bg-slate-50/50 border-b border-slate-100 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">
               <tr>
-                <th className="px-6 py-4">Restaurant Name</th>
-                <th className="px-6 py-4">Location</th>
-                <th className="px-6 py-4">Owner ID</th>
-                <th className="px-6 py-4">Status</th>
-                <th className="px-6 py-4 text-right">Actions</th>
+                <th className="px-10 py-6">Restaurant Name</th>
+                <th className="px-10 py-6">Cuisine</th>
+                <th className="px-10 py-6">Location</th>
+                <th className="px-10 py-6 text-right">App Preview</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-slate-50">
               {filtered.map((r) => (
-                <tr key={r.id || r.ID} className="hover:bg-slate-50/50 transition-colors group">
-                  <td className="px-6 py-4">
-                    <div className="font-bold text-slate-900">{r.name || r.Name}</div>
-                    <div className="text-xs text-slate-400 font-medium font-mono">ID: {r.id || r.ID}</div>
+                <tr key={r.id || r.ID} className="hover:bg-slate-50/30 transition-all group">
+                  <td className="px-10 py-6">
+                    <div className="font-black text-slate-800 text-base">{r.name || r.Name}</div>
                   </td>
-                  <td className="px-6 py-4 text-slate-600 text-sm">
-                    <div className="flex items-center gap-1.5">
-                      <MapPin size={14} className="text-slate-300" /> {r.city || r.City || "Unknown"}
+                  <td className="px-10 py-6">
+                    <div className="flex items-center gap-2.5 text-slate-500 font-bold text-sm">
+                      <Utensils size={15} className="text-indigo-400" />
+                      {r.cuisine_type || r.CuisineType || "Not Specified"}
                     </div>
                   </td>
-                  <td className="px-6 py-4 text-sm font-medium text-slate-700 font-mono text-xs">
-                    {(r.owner_id || r.OwnerID || "N/A").substring(0, 8)}...
-                  </td>
-                  <td className="px-6 py-4">
-                    {(() => {
-                      const status = (r.status || r.Status || "Unknown").toLowerCase();
-                      return (
-                        <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide ${
-                          status === 'active' || status === 'completed' || status === 'both' ? 'bg-green-100 text-green-700' :
-                          status === 'pending' || status === 'registered' ? 'bg-orange-100 text-orange-700' : 'bg-red-100 text-red-700'
-                        }`}>
-                          {status}
-                        </span>
-                      );
-                    })()}
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button 
-                        onClick={() => openPreview(r.id || r.ID)}
-                        className="p-2 text-slate-400 hover:text-[#2e0561] hover:bg-purple-50 rounded-lg transition-colors" 
-                        title="Preview Mobile App"
-                      >
-                        <Smartphone size={16} />
-                      </button>
-                      <button className="p-2 text-slate-400 hover:text-slate-900 hover:bg-slate-100 rounded-lg transition-colors">
-                        <MoreHorizontal size={16} />
-                      </button>
+                  <td className="px-10 py-6">
+                    <div className="flex items-center gap-2.5 text-slate-500 font-bold text-sm">
+                      <MapPin size={15} className="text-indigo-400" />
+                      {r.city || r.City || "Unknown"}
                     </div>
+                  </td>
+                  <td className="px-10 py-6 text-right">
+                    <button 
+                      onClick={() => openPreview(r.id || r.ID)}
+                      className="inline-flex items-center gap-2 px-6 py-2.5 bg-slate-50 text-slate-600 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-[#2e0561] hover:text-white hover:shadow-lg hover:shadow-indigo-200 transition-all active:scale-95"
+                    >
+                      <Smartphone size={14} /> Open Preview
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -180,9 +131,9 @@ export default function RestaurantDirectory() {
           </table>
           
           {filtered.length === 0 && (
-            <div className="p-12 text-center text-slate-400 text-sm flex flex-col items-center gap-2">
-              <AlertCircle size={24} className="opacity-50" />
-              <span>No restaurants found matching your search.</span>
+            <div className="p-24 text-center text-slate-300 flex flex-col items-center gap-3">
+              <AlertCircle size={40} className="opacity-20" />
+              <span className="font-black text-sm uppercase tracking-widest opacity-40">No matching establishments found</span>
             </div>
           )}
         </div>

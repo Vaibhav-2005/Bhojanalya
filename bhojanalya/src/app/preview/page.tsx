@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation"; // Added searchParams
 import { 
   X, Loader2, FileText, ChevronRight, Plane, MapPin, Clock, Phone, Percent, 
   ShoppingBag, LogOut, CalendarCheck
@@ -36,44 +36,69 @@ interface RestaurantUIState {
 
 export default function PreviewShop() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const targetId = searchParams.get("id"); // For Admin use: /preview?id=13
 
   const [restaurant, setRestaurant] = useState<RestaurantUIState | null>(null);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [userRole, setUserRole] = useState<string>("USER");
 
   const capitalize = (str: string) => str ? str.charAt(0).toUpperCase() + str.slice(1) : "";
 
   useEffect(() => {
+    const token = localStorage.getItem('token');
+    
+    // 1. Determine Role via Token Decoding
+    let isAdmin = false;
+    if (token) {
+        try {
+            const payload = JSON.parse(window.atob(token.split('.')[1]));
+            const role = (payload.role || "").toUpperCase();
+            setUserRole(role);
+            isAdmin = role === "ADMIN";
+        } catch (e) { console.error("Token error"); }
+    }
+
+    // 2. SECURITY GUARD
     const navAllowed = sessionStorage.getItem("nav_intent");
-    if (!navAllowed) {
+    // Admins are always allowed if an ID is present, Users need nav_intent
+    if (!isAdmin && !navAllowed) {
         window.location.href = "/auth";
         return;
     }
 
     const fetchPreview = async () => {
       try {
-        const statusRes = await apiRequest('/auth/protected/onboarding', 'GET');
-        const status = (statusRes.onboarding_status || "null").toUpperCase();
+        let rid: string | number | null = targetId;
 
-        // Onboarding Guards
-        if (status === "NULL" || ["REGISTERED", "MENU_PENDING", "PHOTO_PENDING"].includes(status)) {
-            router.replace("/register");
-            return;
-        }
-        if (status === "BOTH_COMPLETED") {
-            router.replace("/deals");
-            return;
+        // If NOT an admin, we perform the standard onboarding checks
+        if (!isAdmin) {
+            const statusRes = await apiRequest('/auth/protected/onboarding', 'GET');
+            const status = (statusRes.onboarding_status || "null").toUpperCase();
+
+            if (status === "NULL" || ["REGISTERED", "MENU_PENDING", "PHOTO_PENDING"].includes(status)) {
+                router.replace("/register");
+                return;
+            }
+            if (status === "BOTH_COMPLETED") {
+                router.replace("/deals");
+                return;
+            }
+
+            const myRestaurants = await apiRequest('/restaurants/me');
+            if (!myRestaurants?.[0]) {
+                router.replace("/register");
+                return;
+            }
+            rid = myRestaurants[0].ID || myRestaurants[0].id;
         }
 
-        const myRestaurants = await apiRequest('/restaurants/me');
-        if (!myRestaurants?.[0]) {
-            router.replace("/register");
-            return;
-        }
+        // 3. Fetch Preview Data
+        // If rid is null (Admin opened without ID), we show error or fallback
+        if (!rid) throw new Error("No restaurant ID provided");
 
-        const resData = myRestaurants[0];
-        const rid = resData.ID || resData.id;
         const data: BackendResponse = await apiRequest(`/restaurants/${rid}/preview`);
 
         const mappedDeals: UIDeal[] = (data.deals || []).map((d, i) => {
@@ -94,10 +119,10 @@ export default function PreviewShop() {
           address: capitalize(data.City), 
           time: (data.opens_at && data.closes_at) ? `${data.opens_at} - ${data.closes_at}` : "11:00 AM - 11:00 PM",
           description: data.short_description || "", 
-          images: data.Images,
+          images: data.Images && data.Images.length > 0 ? data.Images : ["/placeholder-food.jpg"],
           deals: mappedDeals,
           menuLink: Array.isArray(data.menu_pdfs) ? data.menu_pdfs[0] : (data.menu_pdfs || null),
-          isApproved: !!resData.is_approved 
+          isApproved: false // This can be expanded if preview API returns approval status
         });
 
       } catch (err: any) {
@@ -108,11 +133,11 @@ export default function PreviewShop() {
     };
 
     fetchPreview();
-  }, [router]);
+  }, [router, targetId]);
 
   // Photo Slider logic
   useEffect(() => {
-    if (!restaurant || restaurant.images.length <= 1) return;
+    if (!restaurant || !restaurant.images || restaurant.images.length <= 1) return;
     const interval = setInterval(() => {
         setCurrentImageIndex((prev) => (prev + 1) % restaurant.images.length);
     }, 4000); 
@@ -123,6 +148,14 @@ export default function PreviewShop() {
     localStorage.clear();
     sessionStorage.clear();
     window.location.href = "/auth";
+  };
+
+  const handleClose = () => {
+    if (userRole === "ADMIN") {
+        router.push("/admin"); // Admin goes back to dashboard
+    } else {
+        setShowLogoutConfirm(true); // User gets logout confirm
+    }
   };
 
   if (loading) return (
@@ -148,12 +181,12 @@ export default function PreviewShop() {
 
       {/* CLOSE BUTTON */}
       <div className="absolute top-8 right-10 z-50">
-          <button onClick={() => setShowLogoutConfirm(true)} className="p-3 bg-white/5 text-white rounded-2xl hover:bg-red-500 transition-all group border border-white/10">
+          <button onClick={handleClose} className="p-3 bg-white/5 text-white rounded-2xl hover:bg-red-500 transition-all group border border-white/10">
             <X size={24} className="group-hover:rotate-90 transition-transform" />
           </button>
       </div>
 
-      {/* LOGOUT CONFIRMATION */}
+      {/* LOGOUT CONFIRMATION (Only for non-admins usually, but kept as per your UI) */}
       <AnimatePresence>
         {showLogoutConfirm && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/80 backdrop-blur-lg">
@@ -179,7 +212,6 @@ export default function PreviewShop() {
         </div>
 
         <div className="flex-1 overflow-y-auto pb-32 scrollbar-hide">
-          {/* PHOTO SLIDER HEADER */}
           <div className="relative h-[300px] bg-slate-200 overflow-hidden">
             <AnimatePresence mode="wait">
               <motion.div 
@@ -194,7 +226,6 @@ export default function PreviewShop() {
             </AnimatePresence>
             <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/20" />
             
-            {/* Nav Dots */}
             {restaurant && restaurant.images.length > 1 && (
               <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-1.5 z-20">
                 {restaurant.images.map((_, idx) => (
@@ -247,7 +278,7 @@ export default function PreviewShop() {
           </div>
         </div>
 
-        {/* FOOTER - Always Dummy Booking Button */}
+        {/* FOOTER */}
         <div className="absolute bottom-0 w-full p-6 bg-white border-t border-slate-100 z-40">
             <button onClick={() => {}} className="w-full py-4 bg-emerald-600 text-white rounded-2xl flex items-center justify-center gap-2 font-black text-xs uppercase tracking-widest shadow-lg shadow-emerald-100 active:scale-[0.98] transition-all">
                 <CalendarCheck size={18} /> Book Restaurant
