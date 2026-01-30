@@ -5,11 +5,14 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   ArrowLeft, Mail, Lock, User, ArrowRight, 
-  AlertTriangle, CheckCircle2, Loader2, Plane 
+  AlertTriangle, CheckCircle2, Loader2 
 } from "lucide-react";
 import Image from "next/image";
+import { Outfit } from "next/font/google"; // New high-end font
 import Logo from "../../../public/bhojnalaya-text.png";
 import { apiRequest } from "@/lib/api";
+
+const outfit = Outfit({ subsets: ["latin"] });
 
 export default function AuthPage() {
   const router = useRouter();
@@ -25,58 +28,31 @@ export default function AuthPage() {
     password: ""
   });
 
-  // --- 1. THE FLOW ENGINE (Finite State Machine) ---
-  // Decides the exact URL based on real-time database response
+  // --- 1. THE POSITIONING ENGINE ---
   const determineUserFlow = async () => {
     try {
-      // Step A: Check if restaurant exists
-      const myRestaurants = await apiRequest('/restaurants/me');
+      const res = await apiRequest('/auth/protected/onboarding', 'GET');
+      const status = (res.onboarding_status || "null").toUpperCase();
       
-      if (!myRestaurants || myRestaurants.length === 0) {
-        // State: NEW_USER
-        sessionStorage.setItem("nav_intent", "true");
-        router.replace("/register"); 
-        return;
-      }
-
-      const restaurant = myRestaurants[0];
-      const rid = restaurant.ID || restaurant.id;
-
-      // Step B: Check for uploads and deals via Preview
-      let details;
-      try {
-        details = await apiRequest(`/restaurants/${rid}/preview`);
-      } catch (previewErr: any) {
-        // State: NO_DEALS (Caught via API Error)
-        if (previewErr.message?.toLowerCase().includes("at least one deal exists")) {
-          sessionStorage.setItem("nav_intent", "true");
-          router.replace("/deals");
-          return;
-        }
-        throw previewErr;
-      }
-
-      const hasImages = details?.Images && details.Images.length > 0;
-      const hasMenu = details?.menu_pdfs && (Array.isArray(details.menu_pdfs) ? details.menu_pdfs.length > 0 : details.menu_pdfs !== "");
-      const hasDeals = details?.deals && details.deals.length > 0;
-
       sessionStorage.setItem("nav_intent", "true");
 
-      if (!hasImages || !hasMenu) {
-        // State: INCOMPLETE_ASSETS
-        sessionStorage.setItem("incomplete_rid", rid.toString());
-        router.replace("/register?step=upload"); 
-      } else if (!hasDeals) {
-        // State: NO_DEALS
+      if (status === "NULL") {
+        router.replace("/register");
+      } 
+      else if (["REGISTERED", "MENU_PENDING", "PHOTO_PENDING"].includes(status)) {
+        router.replace("/register"); 
+      } 
+      else if (status === "BOTH_COMPLETED") {
         router.replace("/deals");
-      } else {
-        // State: LIVE
+      } 
+      else if (["DEALS_COMPLETED", "COMPLETED"].includes(status)) {
         router.replace("/preview");
+      } 
+      else {
+        router.replace("/register");
       }
-
     } catch (err) {
       console.error("Flow Sync Error:", err);
-      // Fallback: stay on Auth if sync fails
       setCheckingSession(false);
     }
   };
@@ -91,7 +67,12 @@ export default function AuthPage() {
       }
       try {
         await apiRequest('/auth/protected/ping');
-        // Resume journey based on State Machine
+        const payload = JSON.parse(window.atob(token.split('.')[1]));
+        if (payload.role?.toUpperCase() === "ADMIN") {
+            sessionStorage.setItem("nav_intent", "true");
+            router.replace("/admin");
+            return;
+        }
         await determineUserFlow();
       } catch (err: any) {
         localStorage.clear();
@@ -111,7 +92,6 @@ export default function AuthPage() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    setSuccess(null);
     setCheckingSession(true);
 
     try {
@@ -131,9 +111,7 @@ export default function AuthPage() {
         return;
       }
 
-      // Hand off to the State Machine
       await determineUserFlow();
-
     } catch (err: any) {
       setError(err.message || "Invalid credentials.");
       setCheckingSession(false);
@@ -150,11 +128,10 @@ export default function AuthPage() {
         email: formData.email,
         password: formData.password
       });
-      setSuccess("Account ready! Switch to login...");
-      setTimeout(() => {
-        setIsLogin(true);
-        setSuccess(null);
-      }, 2000); 
+      
+      // IMMEDIATE SWITCH LOGIC
+      setSuccess("Account ready! Please login below.");
+      setIsLogin(true); // Switches immediately to login side
     } catch (err: any) {
       setError(err.message || "Registration failed.");
     }
@@ -162,20 +139,21 @@ export default function AuthPage() {
 
   if (checkingSession) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 gap-4">
+      <div className={`min-h-screen flex flex-col items-center justify-center bg-slate-50 gap-4 ${outfit.className}`}>
         <Loader2 className="animate-spin text-[#471396] w-12 h-12"/>
-        <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Syncing with server...</p>
+        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Positioning Journey...</p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 relative overflow-hidden font-sans">
+    <div className={`min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6 relative overflow-hidden ${outfit.className}`}>
       
+      {/* Background Blurs */}
       <div className="absolute -top-[10%] -left-[10%] w-[40%] h-[40%] bg-[#471396]/10 blur-[120px] rounded-full pointer-events-none" />
       <div className="absolute -bottom-[10%] -right-[10%] w-[40%] h-[40%] bg-[#FFCC00]/10 blur-[120px] rounded-full pointer-events-none" />
 
-      <button onClick={() => router.push("/")} className="absolute top-8 left-8 flex items-center gap-2 text-slate-400 hover:text-[#471396] transition-colors font-semibold text-xs z-50 uppercase tracking-widest">
+      <button onClick={() => router.push("/")} className="absolute top-8 left-8 flex items-center gap-2 text-slate-400 hover:text-[#471396] transition-colors font-bold text-xs z-50 uppercase tracking-widest">
         <ArrowLeft className="w-4 h-4" /> Back to Home
       </button>
 
@@ -184,37 +162,41 @@ export default function AuthPage() {
         {/* LOGIN SECTION */}
         <div className="w-1/2 p-12 flex flex-col justify-center">
           <div className="max-w-[320px] mx-auto w-full">
-            <h2 className="text-3xl font-black text-[#2e0561] mb-2 text-center">Login</h2>
-            <p className="text-slate-400 mb-8 text-sm font-medium text-center italic">Manage your establishment.</p>
+            <h2 className="text-4xl font-black text-[#2e0561] mb-2 text-center tracking-tighter">Login</h2>
+            <p className="text-slate-400 mb-8 text-sm font-semibold text-center uppercase tracking-widest">Manage Establishment</p>
             
             <form className="space-y-5" onSubmit={handleLogin}>
-              <AnimatePresence>
+              <AnimatePresence mode="wait">
                 {error && isLogin && (
-                  <motion.div initial={{opacity:0, y:-10}} animate={{opacity:1, y:0}} className="flex items-center gap-2 bg-red-50 text-red-600 px-4 py-3 rounded-xl text-[10px] font-black border border-red-100 uppercase tracking-wide">
+                  <motion.div initial={{opacity:0, y:-10}} animate={{opacity:1, y:0}} exit={{opacity:0}} className="flex items-center gap-2 bg-red-50 text-red-600 px-4 py-3 rounded-2xl text-[10px] font-black border border-red-100 uppercase tracking-wide">
                     <AlertTriangle size={14} /> {error}
                   </motion.div>
                 )}
+                {/* SUCCESS NOTIFICATION RENDERED HERE FOR BOTH LOGIN & POST-REGISTER */}
                 {success && isLogin && (
-                  <motion.div initial={{opacity:0, y:-10}} animate={{opacity:1, y:0}} className="flex items-center gap-2 bg-green-50 text-green-600 px-4 py-3 rounded-xl text-[10px] font-black border border-green-100 uppercase tracking-wide">
+                  <motion.div initial={{opacity:0, scale:0.95}} animate={{opacity:1, scale:1}} className="flex items-center gap-2 bg-green-50 text-green-600 px-4 py-3 rounded-2xl text-[10px] font-black border border-green-100 uppercase tracking-wide">
                     <CheckCircle2 size={14} /> {success}
                   </motion.div>
                 )}
               </AnimatePresence>
+
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Email</label>
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Email</label>
                 <div className="relative">
                   <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <input name="email" type="email" required value={formData.email} onChange={handleChange} placeholder="name@email.com" className="w-full pl-11 pr-4 py-3.5 bg-slate-50 text-slate-700 font-semibold border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#471396] outline-none text-sm" />
+                  <input name="email" type="email" required value={formData.email} onChange={handleChange} placeholder="name@email.com" className="w-full pl-11 pr-4 py-4 bg-slate-50 text-slate-700 font-bold border border-slate-100 rounded-2xl focus:ring-2 focus:ring-[#471396] outline-none text-sm transition-all" />
                 </div>
               </div>
+
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Password</label>
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Password</label>
                 <div className="relative">
                   <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <input name="password" type="password" required value={formData.password} onChange={handleChange} placeholder="••••••••" className="w-full pl-11 pr-4 py-3.5 bg-slate-50 text-slate-700 font-semibold border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#471396] outline-none text-sm" />
+                  <input name="password" type="password" required value={formData.password} onChange={handleChange} placeholder="••••••••" className="w-full pl-11 pr-4 py-4 bg-slate-50 text-slate-700 font-bold border border-slate-100 rounded-2xl focus:ring-2 focus:ring-[#471396] outline-none text-sm transition-all" />
                 </div>
               </div>
-              <button type="submit" className="w-full py-4 bg-[#471396] text-white rounded-xl font-bold text-xs uppercase tracking-widest shadow-lg active:scale-[0.98] transition-all">Sign In</button>
+
+              <button type="submit" className="w-full py-4.5 bg-[#471396] text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-indigo-100 active:scale-[0.98] transition-all hover:bg-[#3b0d82]">Sign In</button>
             </form>
           </div>
         </div>
@@ -222,54 +204,68 @@ export default function AuthPage() {
         {/* REGISTER SECTION */}
         <div className="w-1/2 p-12 flex flex-col justify-center">
           <div className="max-w-[320px] mx-auto w-full">
-            <h2 className="text-3xl font-black text-[#2e0561] mb-2 text-center">Register</h2>
-            <p className="text-slate-400 mb-8 text-sm font-medium text-center italic">Join our network today.</p>
+            <h2 className="text-4xl font-black text-[#2e0561] mb-2 text-center tracking-tighter">Register</h2>
+            <p className="text-slate-400 mb-8 text-sm font-semibold text-center uppercase tracking-widest">Join Network</p>
             <form className="space-y-4" onSubmit={handleRegister}>
-              <AnimatePresence>
+              <AnimatePresence mode="wait">
                 {error && !isLogin && (
-                  <motion.div initial={{opacity:0, y:-10}} animate={{opacity:1, y:0}} className="flex items-center gap-2 bg-red-50 text-red-600 px-4 py-3 rounded-xl text-[10px] font-black border border-red-100 uppercase tracking-wide">
+                  <motion.div initial={{opacity:0, y:-10}} animate={{opacity:1, y:0}} className="flex items-center gap-2 bg-red-50 text-red-600 px-4 py-3 rounded-2xl text-[10px] font-black border border-red-100 uppercase tracking-wide">
                     <AlertTriangle size={14} /> {error}
                   </motion.div>
                 )}
-                {success && !isLogin && (
-                  <motion.div initial={{opacity:0, y:-10}} animate={{opacity:1, y:0}} className="flex items-center gap-2 bg-green-50 text-green-600 px-4 py-3 rounded-xl text-[10px] font-black border border-green-100 uppercase tracking-wide">
-                    <CheckCircle2 size={14} /> {success}
-                  </motion.div>
-                )}
               </AnimatePresence>
+              
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Name</label>
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Name</label>
                 <div className="relative">
                   <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <input name="name" type="text" required value={formData.name} onChange={handleChange} placeholder="Owner Name" className="w-full pl-11 pr-4 py-3.5 bg-slate-50 text-slate-700 font-semibold border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#471396] outline-none text-sm" />
+                  <input name="name" type="text" required value={formData.name} onChange={handleChange} placeholder="Owner Name" className="w-full pl-11 pr-4 py-4 bg-slate-50 text-slate-700 font-bold border border-slate-100 rounded-2xl focus:ring-2 focus:ring-[#471396] outline-none text-sm transition-all" />
                 </div>
               </div>
+
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Email</label>
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Email</label>
                 <div className="relative">
                   <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <input name="email" type="email" required value={formData.email} onChange={handleChange} placeholder="name@email.com" className="w-full pl-11 pr-4 py-3.5 bg-slate-50 text-slate-700 font-semibold border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#471396] outline-none text-sm" />
+                  <input name="email" type="email" required value={formData.email} onChange={handleChange} placeholder="name@email.com" className="w-full pl-11 pr-4 py-4 bg-slate-50 text-slate-700 font-bold border border-slate-100 rounded-2xl focus:ring-2 focus:ring-[#471396] outline-none text-sm transition-all" />
                 </div>
               </div>
+
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest ml-1">Password</label>
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Password</label>
                 <div className="relative">
                   <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                  <input name="password" type="password" required value={formData.password} onChange={handleChange} placeholder="••••••••" className="w-full pl-11 pr-4 py-3.5 bg-slate-50 text-slate-700 font-semibold border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#471396] outline-none text-sm" />
+                  <input name="password" type="password" required value={formData.password} onChange={handleChange} placeholder="••••••••" className="w-full pl-11 pr-4 py-4 bg-slate-50 text-slate-700 font-bold border border-slate-100 rounded-2xl focus:ring-2 focus:ring-[#471396] outline-none text-sm transition-all" />
                 </div>
               </div>
-              <button type="submit" className="w-full py-4 bg-[#FFCC00] text-[#2e0561] rounded-xl font-bold text-xs uppercase tracking-widest shadow-lg flex items-center justify-center gap-2 active:scale-[0.98] transition-all">Sign Up <ArrowRight className="w-4 h-4" /></button>
+
+              <button type="submit" className="w-full py-4.5 bg-[#FFCC00] text-[#2e0561] rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-amber-100 flex items-center justify-center gap-2 active:scale-[0.98] transition-all hover:bg-[#e6b800]">
+                Sign Up <ArrowRight className="w-4 h-4" />
+              </button>
             </form>
           </div>
         </div>
 
         {/* OVERLAY SLIDER */}
-        <motion.div animate={{ x: isLogin ? "100%" : "0%" }} transition={{ type: "spring", stiffness: 70, damping: 15 }} className="absolute top-0 left-0 w-1/2 h-full bg-[#471396] z-40 flex flex-col items-center justify-center p-12 text-center text-white shadow-[0_0_50px_rgba(0,0,0,0.3)]">
-          <div className="mb-10"><Image src={Logo} alt="Logo" width={200} height={50} style={{ filter: "brightness(1.2) saturate(1.2)" }} /></div>
+        <motion.div 
+          animate={{ x: isLogin ? "100%" : "0%" }} 
+          transition={{ type: "spring", stiffness: 80, damping: 18 }} 
+          className="absolute top-0 left-0 w-1/2 h-full bg-[#471396] z-40 flex flex-col items-center justify-center p-12 text-center text-white shadow-[0_0_50px_rgba(0,0,0,0.3)]"
+        >
+          <div className="mb-10 scale-110">
+            <Image src={Logo} alt="Logo" width={220} height={60} style={{ filter: "brightness(1.2) saturate(1.2)" }} />
+          </div>
           <div className="space-y-6">
-            <h3 className="text-2xl font-bold">{isLogin ? "New To Bhojanalya?" : "Welcome Back!"}</h3>
-            <p className="text-white/70 text-sm leading-relaxed max-w-[280px]">{isLogin ? "Start your journey by creating a partner account." : "Access your dashboard to manage your menu."}</p>
-            <button onClick={() => {setIsLogin(!isLogin); setError(null); setSuccess(null);}} className="px-12 py-3 border-2 border-[#FFCC00] text-[#FFCC00] rounded-full font-bold text-[10px] hover:bg-[#FFCC00] hover:text-[#471396] transition-all uppercase tracking-widest shadow-xl shadow-black/20">{isLogin ? "Create Account" : "Login Instead"}</button>
+            <h3 className="text-3xl font-black tracking-tighter">{isLogin ? "New To Bhojanalya?" : "Welcome Back!"}</h3>
+            <p className="text-white/70 text-sm font-medium leading-relaxed max-w-[280px]">
+              {isLogin ? "Start your journey by creating a partner account." : "Access your dashboard to manage your menu."}
+            </p>
+            <button 
+              onClick={() => {setIsLogin(!isLogin); setError(null); setSuccess(null);}} 
+              className="px-12 py-3.5 border-2 border-[#FFCC00] text-[#FFCC00] rounded-full font-black text-[10px] hover:bg-[#FFCC00] hover:text-[#471396] transition-all uppercase tracking-widest shadow-xl shadow-black/20 active:scale-95"
+            >
+              {isLogin ? "Create Account" : "Login Instead"}
+            </button>
           </div>
         </motion.div>
       </div>

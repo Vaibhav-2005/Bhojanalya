@@ -1,7 +1,6 @@
 // src/lib/api.ts
 
-// ⚠️ NOTICE: We are pointing to port 8000 because that is what your main.go uses
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
 export async function apiRequest(endpoint: string, method: string = 'GET', body?: any, isFile: boolean = false) {
   // 1. Get the token from storage (if we have one)

@@ -44,7 +44,7 @@ export default function AdminDashboard() {
         try {
           const data = await apiRequest('/admin/menus/pending');
           const list = data.pending_menus || data || [];
-          
+          console.log("Fetched requests:", list);
           const safeList = list.map((item: any, index: number) => ({
             ...item,
             _ui_key: item.ID || `fallback-${index}`
@@ -72,7 +72,8 @@ export default function AdminDashboard() {
   const handleApprove = async (e: React.MouseEvent, restaurantId: number, menuId: number) => {
     e.stopPropagation(); 
     try {
-        await apiRequest(`/admin/menus/${restaurantId}/approve`, 'POST');
+        await apiRequest(`/admin/restaurants/${restaurantId}/approve`, 'POST');
+        console.log("Menu approved:", menuId);
         setRequests(prev => prev.filter(req => req.ID !== menuId));
     } catch (err) {
         console.error("Approval failed", err);

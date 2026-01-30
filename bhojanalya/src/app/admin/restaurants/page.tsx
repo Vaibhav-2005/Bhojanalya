@@ -14,18 +14,15 @@ export default function RestaurantDirectory() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
 
-  // SECURITY GUARD & DATA FETCH
   useEffect(() => {
     const token = localStorage.getItem('token');
 
-    // 1. Check Token Existence
     if (!token) {
       router.push('/auth');
       return;
     }
 
     try {
-      // 2. Decode & Verify Role
       const base64Url = token.split('.')[1];
       const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
       const jsonPayload = decodeURIComponent(window.atob(base64).split('').map(function(c) {
@@ -36,21 +33,33 @@ export default function RestaurantDirectory() {
       const role = (decodedToken.role || "").toUpperCase();
 
       if (role !== "ADMIN") {
-        console.warn("Unauthorized Access: User is not Admin");
-        router.push('/deals'); // Kick to deal creation page
+        router.push('/deals'); 
         return;
       }
 
-      // 3. Fetch Data (Using our Next.js API Bypass)
       const fetchData = async () => {
         try {
-          // Calls the Postgres DB directly via Next.js API
-          const response = await fetch('/api/admin/restaurants');
-          if (!response.ok) throw new Error("Failed to fetch");
-          const data = await response.json();
+          // --- THE FIX: Use the full backend URL ---
+          const baseUrl = process.env.NEXT_PUBLIC_API_URL;
+          const response = await fetch(`${baseUrl}/admin/restaurants/approved`, {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            }
+          });
+          
+          if (!response.ok) throw new Error(`Server Error: ${response.status}`);
+          
+          // Use text() first to safely handle empty responses
+          const text = await response.text();
+          const data = text ? JSON.parse(text) : [];
+          console.log("Fetched Restaurants:", data);
+          
           setRestaurants(data || []);
-        } catch (err) {
-          console.error("Failed to load directory", err);
+        } catch (err: any) {
+          console.error("Directory fetch failed:", err.message);
+          setRestaurants([]);
         } finally {
           setLoading(false);
         }
@@ -64,9 +73,7 @@ export default function RestaurantDirectory() {
     }
   }, [router]);
 
-  // Filter Logic
   const filtered = restaurants.filter(r => {
-    // Handle Postgres lowercase keys (id, name, city)
     const name = (r.name || r.Name || "").toLowerCase();
     const location = (r.city || r.City || "").toLowerCase();
     const search = searchTerm.toLowerCase();
@@ -90,9 +97,7 @@ export default function RestaurantDirectory() {
 
   return (
     <div className="min-h-screen bg-[#F8F9FB] font-sans pb-20">
-      
       <div className="max-w-7xl mx-auto px-8 py-12">
-        {/* Page Header */}
         <div className="flex justify-between items-end mb-8">
           <div>
             <h1 className="text-3xl font-bold text-slate-900">Restaurants</h1>
@@ -100,7 +105,6 @@ export default function RestaurantDirectory() {
           </div>
           
           <div className="flex gap-3">
-            {/* Search Input */}
             <div className="flex items-center gap-2 bg-white px-4 py-2.5 rounded-xl border border-slate-200 shadow-sm">
               <Search size={16} className="text-slate-400" />
               <input 
@@ -111,14 +115,12 @@ export default function RestaurantDirectory() {
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
-            {/* Filter Button */}
             <button className="p-2.5 bg-white border border-slate-200 rounded-xl text-slate-600 hover:bg-slate-50">
               <Filter size={18} />
             </button>
           </div>
         </div>
 
-        {/* Directory Table */}
         <div className="bg-white rounded-[1.5rem] border border-slate-200 shadow-sm overflow-hidden">
           <table className="w-full text-left">
             <thead className="bg-slate-50/50 border-b border-slate-200 text-xs font-bold text-slate-400 uppercase tracking-wider">
@@ -137,8 +139,8 @@ export default function RestaurantDirectory() {
                     <div className="font-bold text-slate-900">{r.name || r.Name}</div>
                     <div className="text-xs text-slate-400 font-medium font-mono">ID: {r.id || r.ID}</div>
                   </td>
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-1.5 text-slate-600 text-sm">
+                  <td className="px-6 py-4 text-slate-600 text-sm">
+                    <div className="flex items-center gap-1.5">
                       <MapPin size={14} className="text-slate-300" /> {r.city || r.City || "Unknown"}
                     </div>
                   </td>
@@ -150,8 +152,8 @@ export default function RestaurantDirectory() {
                       const status = (r.status || r.Status || "Unknown").toLowerCase();
                       return (
                         <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide ${
-                          status === 'active' ? 'bg-green-100 text-green-700' :
-                          status === 'pending' ? 'bg-orange-100 text-orange-700' : 'bg-red-100 text-red-700'
+                          status === 'active' || status === 'completed' || status === 'both' ? 'bg-green-100 text-green-700' :
+                          status === 'pending' || status === 'registered' ? 'bg-orange-100 text-orange-700' : 'bg-red-100 text-red-700'
                         }`}>
                           {status}
                         </span>
