@@ -121,8 +121,8 @@ export default function Navbar() {
                 </>
               ) : (
                 <>
-                  <NavLink active={pathname === "/deals"} onClick={() => router.push("/deals")} icon={<LayoutDashboard size={14} />} label="Deals" />
-                  {/* Edit button logic preserved */}
+                  {/* <NavLink active={pathname === "/deals"} onClick={() => router.push("/deals")} icon={<LayoutDashboard size={14} />} label="Deals" />
+                  Edit button logic preserved */}
                 </>
               )}
             </div>

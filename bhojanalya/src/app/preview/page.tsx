@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation"; // Added searchParams
+import { useEffect, useState, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { 
   X, Loader2, FileText, ChevronRight, Plane, MapPin, Clock, Phone, Percent, 
   ShoppingBag, LogOut, CalendarCheck
@@ -34,15 +34,14 @@ interface RestaurantUIState {
   menuLink: string | null; isApproved: boolean;
 }
 
-export default function PreviewShop() {
+function PreviewContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const targetId = searchParams.get("id"); // For Admin use: /preview?id=13
+  const targetId = searchParams.get("id");
 
   const [restaurant, setRestaurant] = useState<RestaurantUIState | null>(null);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [userRole, setUserRole] = useState<string>("USER");
 
   const capitalize = (str: string) => str ? str.charAt(0).toUpperCase() + str.slice(1) : "";
@@ -50,7 +49,6 @@ export default function PreviewShop() {
   useEffect(() => {
     const token = localStorage.getItem('token');
     
-    // 1. Determine Role via Token Decoding
     let isAdmin = false;
     if (token) {
         try {
@@ -61,9 +59,7 @@ export default function PreviewShop() {
         } catch (e) { console.error("Token error"); }
     }
 
-    // 2. SECURITY GUARD
     const navAllowed = sessionStorage.getItem("nav_intent");
-    // Admins are always allowed if an ID is present, Users need nav_intent
     if (!isAdmin && !navAllowed) {
         window.location.href = "/auth";
         return;
@@ -73,7 +69,6 @@ export default function PreviewShop() {
       try {
         let rid: string | number | null = targetId;
 
-        // If NOT an admin, we perform the standard onboarding checks
         if (!isAdmin) {
             const statusRes = await apiRequest('/auth/protected/onboarding', 'GET');
             const status = (statusRes.onboarding_status || "null").toUpperCase();
@@ -95,8 +90,6 @@ export default function PreviewShop() {
             rid = myRestaurants[0].ID || myRestaurants[0].id;
         }
 
-        // 3. Fetch Preview Data
-        // If rid is null (Admin opened without ID), we show error or fallback
         if (!rid) throw new Error("No restaurant ID provided");
 
         const data: BackendResponse = await apiRequest(`/restaurants/${rid}/preview`);
@@ -119,10 +112,10 @@ export default function PreviewShop() {
           address: capitalize(data.City), 
           time: (data.opens_at && data.closes_at) ? `${data.opens_at} - ${data.closes_at}` : "11:00 AM - 11:00 PM",
           description: data.short_description || "", 
-          images: data.Images && data.Images.length > 0 ? data.Images : ["/placeholder-food.jpg"],
+          images: data.Images && data.Images.length > 0 ? data.Images.slice(0, 3) : ["/placeholder-food.jpg"],
           deals: mappedDeals,
           menuLink: Array.isArray(data.menu_pdfs) ? data.menu_pdfs[0] : (data.menu_pdfs || null),
-          isApproved: false // This can be expanded if preview API returns approval status
+          isApproved: false 
         });
 
       } catch (err: any) {
@@ -135,26 +128,21 @@ export default function PreviewShop() {
     fetchPreview();
   }, [router, targetId]);
 
-  // Photo Slider logic
+  // --- AUTOMATIC SLIDING LOGIC ---
   useEffect(() => {
     if (!restaurant || !restaurant.images || restaurant.images.length <= 1) return;
     const interval = setInterval(() => {
         setCurrentImageIndex((prev) => (prev + 1) % restaurant.images.length);
-    }, 4000); 
+    }, 4500); // 4.5 seconds per slide
     return () => clearInterval(interval);
   }, [restaurant]);
 
-  const handleLogout = () => {
-    localStorage.clear();
-    sessionStorage.clear();
-    window.location.href = "/auth";
-  };
-
   const handleClose = () => {
+    window.close();
     if (userRole === "ADMIN") {
-        router.push("/admin"); // Admin goes back to dashboard
+        router.push("/admin");
     } else {
-        setShowLogoutConfirm(true); // User gets logout confirm
+        router.push("/deals");
     }
   };
 
@@ -173,35 +161,17 @@ export default function PreviewShop() {
         .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
       `}</style>
 
-      {/* TOP LEFT HEADER */}
+      {/* TOP HEADER */}
       <div className={`absolute top-8 left-10 flex flex-col gap-1 z-50 ${outfit.className}`}>
           <h2 className="text-white font-black text-2xl tracking-tighter uppercase">Live Preview</h2>
           <div className="h-1 w-12 bg-[#FFCC00] rounded-full" />
       </div>
 
-      {/* CLOSE BUTTON */}
       <div className="absolute top-8 right-10 z-50">
           <button onClick={handleClose} className="p-3 bg-white/5 text-white rounded-2xl hover:bg-red-500 transition-all group border border-white/10">
             <X size={24} className="group-hover:rotate-90 transition-transform" />
           </button>
       </div>
-
-      {/* LOGOUT CONFIRMATION (Only for non-admins usually, but kept as per your UI) */}
-      <AnimatePresence>
-        {showLogoutConfirm && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/80 backdrop-blur-lg">
-            <motion.div initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 20 }} className="bg-white rounded-[2.5rem] p-10 max-w-sm w-full text-center shadow-2xl">
-              <div className="w-16 h-16 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto mb-6"><LogOut size={32} /></div>
-              <h3 className="text-xl font-black text-slate-900 mb-2 tracking-tight">Sign Out?</h3>
-              <p className="text-slate-500 text-sm mb-8 font-medium">Are you sure you want to logout?</p>
-              <div className="flex flex-col gap-3">
-                <button onClick={handleLogout} className="w-full py-4 bg-red-500 text-white rounded-2xl font-bold text-xs uppercase tracking-widest shadow-lg shadow-red-100 active:scale-95 transition-all">Yes, Logout</button>
-                <button onClick={() => setShowLogoutConfirm(false)} className="w-full py-4 bg-slate-100 text-slate-600 rounded-2xl font-bold text-xs uppercase tracking-widest active:scale-95 transition-all">Cancel</button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
 
       {/* PHONE Mockup */}
       <div className="relative w-[390px] h-[800px] max-h-[95vh] bg-white rounded-[3rem] border-[10px] border-slate-800 shadow-[0_0_100px_rgba(0,0,0,0.5)] overflow-hidden flex flex-col shrink-0">
@@ -212,29 +182,34 @@ export default function PreviewShop() {
         </div>
 
         <div className="flex-1 overflow-y-auto pb-32 scrollbar-hide">
+          {/* IMAGE SLIDER CONTAINER */}
           <div className="relative h-[300px] bg-slate-200 overflow-hidden">
             <AnimatePresence mode="wait">
               <motion.div 
                 key={currentImageIndex}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 1 }}
+                initial={{ opacity: 0, x: 20 }} 
+                animate={{ opacity: 1, x: 0 }} 
+                exit={{ opacity: 0, x: -20 }}
+                transition={{ duration: 0.8, ease: "easeInOut" }}
                 className="absolute inset-0 bg-cover bg-center" 
                 style={{ backgroundImage: `url('${restaurant?.images[currentImageIndex]}')` }} 
               />
             </AnimatePresence>
             <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/20" />
             
+            {/* SLIDER DOTS */}
             {restaurant && restaurant.images.length > 1 && (
               <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-1.5 z-20">
                 {restaurant.images.map((_, idx) => (
-                  <div key={idx} className={`w-1.5 h-1.5 rounded-full transition-all ${idx === currentImageIndex ? 'bg-white w-4' : 'bg-white/40'}`} />
+                  <div 
+                    key={idx} 
+                    className={`h-1.5 rounded-full transition-all duration-300 ${idx === currentImageIndex ? 'bg-[#FFCC00] w-5' : 'bg-white/40 w-1.5'}`} 
+                  />
                 ))}
               </div>
             )}
 
-            <div className="absolute bottom-0 w-full p-6 text-white z-20">
+            <div className="absolute bottom-12 w-full px-6 text-white z-20">
               <h1 className="text-xl capitalize font-black leading-tight mb-1">{restaurant?.name}</h1>
               <p className="text-xs text-white/80 font-bold uppercase tracking-widest">{restaurant?.cuisine}</p>
             </div>
@@ -267,26 +242,36 @@ export default function PreviewShop() {
 
           <div className="px-6 pb-12">
             {restaurant?.menuLink && (
-                <a href={restaurant.menuLink} target="_blank" rel="noopener noreferrer" className="flex items-center justify-between p-5 bg-white border border-slate-100 rounded-2xl shadow-sm hover:border-[#471396] transition-all group active:scale-95">
-                   <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 rounded-xl bg-[#471396]/5 flex items-center justify-center text-[#471396] group-hover:bg-[#471396] group-hover:text-white transition-all"><FileText size={22} /></div>
-                      <div><p className="text-sm font-black text-slate-900">Digital Menu</p><p className="text-[10px] text-slate-400 font-bold uppercase">View PDF</p></div>
-                   </div>
-                   <ChevronRight size={18} className="text-slate-300 group-hover:text-[#471396]" />
+                <a 
+                  href={restaurant.menuLink} 
+                  target="_blank" 
+                  rel="noopener noreferrer" 
+                  className="flex items-center justify-between p-5 bg-white border border-slate-100 rounded-2xl shadow-sm hover:border-[#471396] transition-all group active:scale-95"
+                >
+                    <div className="flex items-center gap-4">
+                       <div className="w-12 h-12 rounded-xl bg-[#471396]/5 flex items-center justify-center text-[#471396] group-hover:bg-[#471396] group-hover:text-white transition-all"><FileText size={22} /></div>
+                       <div><p className="text-sm font-black text-slate-900">Menu</p><p className="text-[10px] text-slate-400 font-bold uppercase">Click Here to Download Menu</p></div>
+                    </div>
+                    <ChevronRight size={18} className="text-slate-300 group-hover:text-[#471396]" />
                 </a>
             )}
           </div>
         </div>
 
-        {/* FOOTER */}
         <div className="absolute bottom-0 w-full p-6 bg-white border-t border-slate-100 z-40">
-            <button onClick={() => {}} className="w-full py-4 bg-emerald-600 text-white rounded-2xl flex items-center justify-center gap-2 font-black text-xs uppercase tracking-widest shadow-lg shadow-emerald-100 active:scale-[0.98] transition-all">
+            <button className="w-full py-4 bg-emerald-600 text-white rounded-2xl flex items-center justify-center gap-2 font-black text-xs uppercase tracking-widest shadow-lg shadow-emerald-100 active:scale-[0.98] transition-all">
                 <CalendarCheck size={18} /> Book Restaurant
             </button>
         </div>
-
-        <div className="absolute bottom-2 left-1/2 -translate-x-1/2 w-32 h-1 bg-slate-900 rounded-full z-30 opacity-10" />
       </div>
     </div>
+  );
+}
+
+export default function PreviewShop() {
+  return (
+    <Suspense fallback={<div className="h-screen w-screen bg-slate-900 flex items-center justify-center"><Loader2 className="text-[#FFCC00] animate-spin" /></div>}>
+      <PreviewContent />
+    </Suspense>
   );
 }
