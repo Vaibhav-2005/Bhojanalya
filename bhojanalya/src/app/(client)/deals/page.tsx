@@ -40,7 +40,7 @@ export default function DealsPage() {
   
   // Deal Data
   const [suggestedDeals, setSuggestedDeals] = useState<Deal[]>([]);
-  const [activeDeals, setActiveDeals] = useState<Deal[]>([]); // New state for existing deals
+  const [activeDeals, setActiveDeals] = useState<Deal[]>([]); 
   const [draftDeals, setDraftDeals] = useState<Deal[]>([]); 
   
   // Form State
@@ -55,6 +55,7 @@ export default function DealsPage() {
 
   const restaurantName = restaurants[0]?.Name || restaurants[0]?.name || "Your Restaurant";
   const restaurantId = restaurants[0]?.ID || restaurants[0]?.id;
+  const indicator = restaurants[0]?.Status || restaurants[0]?.status || "Incomplete";
 
   // --- 1. UPDATED FLOW GUARD ---
   const checkOnboardingFlow = async () => {
@@ -63,13 +64,11 @@ export default function DealsPage() {
       const status = (statusRes.onboarding_status || "null").toUpperCase();
       setOnboardingStatus(status);
 
-      // Block users who haven't finished menu/photos
       if (status === "NULL" || ["REGISTERED", "MENU_PENDING", "PHOTO_PENDING"].includes(status)) {
         router.replace("/register");
         return;
       }
 
-      // If status is BOTH_COMPLETED, DEALS_COMPLETED, or COMPLETED, they stay here.
       if (["BOTH_COMPLETED", "DEALS_COMPLETED", "COMPLETED"].includes(status)) {
         const myRestaurants = await apiRequest('/restaurants/me');
         if (!myRestaurants?.[0]) return router.replace("/register");
@@ -79,7 +78,6 @@ export default function DealsPage() {
         setRestaurants(myRestaurants);
         setUser({ email: localStorage.getItem("email") });
 
-        // Market Insights
         const suggestData = await apiRequest(`/restaurants/${rid}/deals/suggestion`);
         setInsights({
           myCost: suggestData.restaurant_cost_for_two || 0,
@@ -88,16 +86,14 @@ export default function DealsPage() {
           positioning: suggestData.positioning || ""
         });
 
-        // 2. CONDITIONAL DATA FETCHING
         if (status === "BOTH_COMPLETED") {
           const rawSuggestions = suggestData.suggestions || [];
           setSuggestedDeals(rawSuggestions.map((d: any, i: number) => mapBackendToFrontend(d, i)));
         } else {
-          // Fetch Active Deals for DEALS_COMPLETED or COMPLETED
           const existingDeals = await apiRequest(`/restaurants/${rid}/deals`);
           setActiveDeals(existingDeals.map((d: any) => ({
             ...mapBackendToFrontend(d, d.ID || d.id),
-            id: d.ID || d.id // Ensure we use real DB IDs for active deals
+            id: d.ID || d.id 
           })));
         }
 
@@ -123,7 +119,6 @@ export default function DealsPage() {
     checkOnboardingFlow();
   }, [router]);
 
-  // --- HELPERS ---
   const mapBackendToFrontend = (d: any, i: string | number): Deal => {
     let cat: DealCategory = "Main Course";
     const c = (d.category || "").toLowerCase();
@@ -151,7 +146,6 @@ export default function DealsPage() {
     setTimeout(() => setToast(null), 3000);
   };
 
-  // --- HANDLERS ---
   const handlePublishDeals = async () => {
     if (draftDeals.length === 0 || !restaurantId) return;
     setIsPublishing(true);
@@ -168,8 +162,6 @@ export default function DealsPage() {
       await Promise.all(publishPromises);
       await apiRequest('/auth/protected/onboarding', 'PATCH', { onboarding_status: "DEALS_COMPLETED" });
       showToast("Campaigns published!", "success");
-      
-      // RELOAD AFTER PUBLISH
       window.location.reload();
     } catch (error) {
       showToast("Publish failed.", "error");
@@ -179,7 +171,7 @@ export default function DealsPage() {
 
   const handleRemoveActiveDeal = async (dealId: string) => {
     try {
-      await apiRequest(`/deals/${dealId}`, 'DELETE', { status: 'inactive' }); // Or whatever payload remove requires
+      await apiRequest(`/deals/${dealId}`, 'DELETE', { status: 'inactive' });
       setActiveDeals(activeDeals.filter(d => d.id !== dealId));
       showToast("Deal removed successfully", "success");
     } catch (err) {
@@ -215,11 +207,12 @@ export default function DealsPage() {
     return Math.max(8, Math.min(((value - scaleMin) / (scaleMax - scaleMin)) * 100, 92));
   };
 
+  // --- FIXED SORTING ERROR ---
   const statItems = [
-    { label: "You", value: insights.myCost, color: "#471396", labelColor: "text-[#471396]", valueColor: "text-[#471396]" },
-    { label: "Median", value: insights.marketMedian, color: "#94a3b8", labelColor: "text-slate-400", valueColor: "text-slate-400" },
-    { label: "Avg", value: insights.marketAvg, color: "#334155", labelColor: "text-slate-600", valueColor: "text-slate-700" }
-  ].sort((a, b) => a.value - b.value);
+    { label: "You", value: (insights.myCost || 0).toFixed(0), color: "#471396", labelColor: "text-[#471396]", valueColor: "text-[#471396]" },
+    { label: "Median", value: (insights.marketMedian || 0).toFixed(0), color: "#94a3b8", labelColor: "text-slate-400", valueColor: "text-slate-400" },
+    { label: "Avg", value: (insights.marketAvg || 0).toFixed(0), color: "#334155", labelColor: "text-slate-600", valueColor: "text-slate-700" }
+  ].sort((a, b) => Number(a.value) - Number(b.value));
 
   if (loading) return ( <div className="min-h-screen flex items-center justify-center bg-[#F8F9FB]"><Loader2 className="w-12 h-12 text-[#471396] animate-spin" /></div> );
 
@@ -230,22 +223,26 @@ export default function DealsPage() {
           <div className="flex flex-col">
             <h1 className="text-2xl font-bold tracking-tight text-slate-900">Manage Campaigns</h1>
             <div className="flex items-center gap-2 mt-1">
-               <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
-               <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-widest font-mono">
-                  <Mail size={10} /> {user?.email || "..."}
-               </div>
+                <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+                <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-widest font-mono">
+                   <Mail size={10} /> {user?.email || "..."}
+                </div>
             </div>
           </div>
-          <div className="px-4 py-1.5 rounded-full border bg-white border-slate-200 text-slate-500 text-xs font-bold flex items-center gap-2 uppercase tracking-wider shadow-sm">
-            <Layers size={14} /> {onboardingStatus === "BOTH_COMPLETED" ? "Phase 3: Setup" : "Live Dashboard"}
+          
+          {/* --- UPDATED INDICATOR COLOR --- */}
+          <div className={`px-4 py-1.5 rounded-full border bg-white text-xs font-bold flex items-center gap-2 uppercase tracking-wider shadow-sm transition-all ${
+             indicator?.toLowerCase() === "pending" 
+             ? "border-slate-200 text-slate-500" 
+             : "border-green-200 text-green-600 bg-green-50/50"
+          }`}>
+            <Layers size={14} /> {indicator?.toLowerCase() === "pending" ? "Pending Approval" : "Approved"}
           </div>
         </div>
       </header>
 
       <main className="pt-8 px-8 max-w-7xl mx-auto h-[calc(100vh-100px)]">
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 h-full">
-          
-          {/* LEFT: TERNARY SUGGESTIONS vs ACTIVE */}
           <div className="lg:col-span-1 flex flex-col h-full overflow-hidden">
              <div className="bg-white border border-slate-200 rounded-[2rem] p-6 flex flex-col h-full shadow-sm relative overflow-hidden">
                 {onboardingStatus === "BOTH_COMPLETED" ? (
@@ -299,7 +296,6 @@ export default function DealsPage() {
              </div>
           </div>
 
-          {/* CENTER: BUILDER */}
           <div className="lg:col-span-2 flex flex-col h-full min-h-0">
              <div className="bg-white border border-slate-200 rounded-[2rem] p-8 flex flex-col h-full shadow-sm relative overflow-hidden">
                 <div className="flex-shrink-0 mb-4 pb-4 border-b border-slate-100">
@@ -364,9 +360,7 @@ export default function DealsPage() {
              </div>
           </div>
 
-          {/* RIGHT: INSIGHTS & PREVIEW */}
           <div className="lg:col-span-1 flex flex-col gap-6 h-full">
-             {/* PREVIEW BUTTON - OPENS IN NEW WINDOW */}
              <div onClick={() => window.open(`/preview?id=${restaurantId}`, "_blank")} className="h-1/3 bg-gradient-to-br from-[#471396] to-[#6d28d9] rounded-[2rem] p-6 text-white shadow-lg cursor-pointer transition-transform hover:scale-[1.02] group relative overflow-hidden">
                 <div className="absolute top-0 right-0 p-4 opacity-10"><Eye size={80} /></div>
                 <div className="relative z-10 flex flex-col h-full justify-between">
@@ -401,7 +395,7 @@ export default function DealsPage() {
                              <div className="absolute top-1/2 left-0 w-full h-1.5 bg-slate-200/50 rounded-full -translate-y-1/2"></div>
                              {statItems.map((item, idx) => (
                                 <div key={idx} className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 rounded-full border-2 border-white shadow-sm transition-all duration-500"
-                                    style={{ left: `${getPositionPercentage(item.value)}%`, backgroundColor: item.color, width: item.label === 'You' ? '14px' : '10px', height: item.label === 'You' ? '14px' : '10px', zIndex: item.label === 'You' ? 20 : 10 }}
+                                    style={{ left: `${getPositionPercentage(Number(item.value))}%`, backgroundColor: item.color, width: item.label === 'You' ? '14px' : '10px', height: item.label === 'You' ? '14px' : '10px', zIndex: item.label === 'You' ? 20 : 10 }}
                                 />
                              ))}
                         </div>

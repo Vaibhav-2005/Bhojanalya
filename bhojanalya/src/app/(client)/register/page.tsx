@@ -303,7 +303,7 @@ function RegisterFormContent() {
                   </div>
                   <div className="flex flex-col gap-2">
                     <label className="text-[10px] font-black text-slate-800 uppercase tracking-widest ml-1">Bio Description *</label>
-                    <textarea placeholder="Tell us about your kitchen..." className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none text-slate-700 font-bold h-32 resize-none focus:border-[#471396] transition-all" value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})} />
+                    <textarea placeholder="Tell us about your restaurant..." className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none text-slate-700 font-bold h-32 resize-none focus:border-[#471396] transition-all" value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})} />
                     {errors.description && <span className="text-[10px] text-red-500 font-black uppercase tracking-tight ml-1">{errors.description}</span>}
                   </div>
                 </div>

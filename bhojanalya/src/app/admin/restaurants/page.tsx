@@ -3,8 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { 
-  Search, MapPin, Filter, 
-  Smartphone, Loader2, AlertCircle, Utensils
+  Search, MapPin, Smartphone, Loader2, AlertCircle, Utensils
 } from "lucide-react";
 import { apiRequest } from "@/lib/api";
 
@@ -15,28 +14,47 @@ export default function RestaurantDirectory() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
 
-  // --- AUTH & DATA FETCHING ---
+  // --- AUTH SHIELD & DATA FETCHING ---
   useEffect(() => {
     const token = localStorage.getItem('token');
+    
+    // 1. Absolute Guard: No token means no entry
     if (!token) {
-      router.push('/auth');
+      router.replace('/auth');
       return;
     }
 
-    const fetchData = async () => {
-      try {
-        // Using your standardized apiRequest helper
-        const data = await apiRequest('/admin/restaurants/approved', 'GET');
-        setRestaurants(data || []);
-      } catch (err: any) {
-        console.error("Directory fetch failed:", err.message);
-        setRestaurants([]);
-      } finally {
-        setLoading(false);
-      }
-    };
+    try {
+      // 2. Role Shield: Decode JWT to verify Admin status
+      const payload = JSON.parse(window.atob(token.split('.')[1]));
+      const role = (payload.role || "").toUpperCase();
 
-    fetchData();
+      if (role !== "ADMIN") {
+        // Partners/Users are redirected away from the directory
+        router.replace('/deals'); 
+        return;
+      }
+
+      // 3. Authorized Fetch: Only runs if role === "ADMIN"
+      const fetchData = async () => {
+        try {
+          const data = await apiRequest('/admin/restaurants/approved', 'GET');
+          setRestaurants(data || []);
+        } catch (err: any) {
+          console.error("Directory fetch failed:", err.message);
+          setRestaurants([]);
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      fetchData();
+
+    } catch (e) {
+      // Handle corrupt tokens
+      localStorage.clear();
+      router.replace('/auth');
+    }
   }, [router]);
 
   // Filtering Logic
@@ -57,7 +75,7 @@ export default function RestaurantDirectory() {
       <div className="min-h-screen flex items-center justify-center bg-[#F8F9FB]">
         <div className="flex flex-col items-center gap-4">
           <Loader2 className="w-10 h-10 animate-spin text-[#471396]" />
-          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Loading Directory...</p>
+          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Verifying Directory Access...</p>
         </div>
       </div>
     );

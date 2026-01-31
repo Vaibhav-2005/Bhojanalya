@@ -21,15 +21,15 @@ interface BackendDeal {
 }
 
 interface BackendResponse {
-  id: number; Name: string; City: string; CuisineType: string;
-  Images: string[]; short_description?: string; opens_at?: string; closes_at?: string;
+  id: number; name: string; city: string; cuisine_type: string;
+  images: string[]; short_description?: string; opens_at?: string; closes_at?: string;
   deals: BackendDeal[]; menu_pdfs: string[] | string; 
 }
 
 interface UIDeal { code: string; title: string; desc: string; color: string; }
 
 interface RestaurantUIState {
-  name: string; cuisine: string; address: string; time: string;
+  name: string; cuisine: string; city: string; time: string;
   description: string; images: string[]; deals: UIDeal[];
   menuLink: string | null; isApproved: boolean;
 }
@@ -107,12 +107,12 @@ function PreviewContent() {
         });
 
         setRestaurant({
-          name: data.Name, 
-          cuisine: capitalize(data.CuisineType) || "Multi-Cuisine", 
-          address: capitalize(data.City), 
-          time: (data.opens_at && data.closes_at) ? `${data.opens_at} - ${data.closes_at}` : "11:00 AM - 11:00 PM",
+          name: data.name, 
+          cuisine: capitalize(data.cuisine_type) || "Multi-Cuisine", 
+          city: capitalize(data.city),
+          time: (data.opens_at && data.closes_at) ? `${data.opens_at?.slice(0,5)} - ${data.closes_at?.slice(0,5)}` : "11:00 AM - 11:00 PM",
           description: data.short_description || "", 
-          images: data.Images && data.Images.length > 0 ? data.Images.slice(0, 3) : ["/placeholder-food.jpg"],
+          images: data.images && data.images.length > 0 ? data.images.slice(0, 3) : ["/placeholder-food.jpg"],
           deals: mappedDeals,
           menuLink: Array.isArray(data.menu_pdfs) ? data.menu_pdfs[0] : (data.menu_pdfs || null),
           isApproved: false 
@@ -217,7 +217,7 @@ function PreviewContent() {
 
           <div className="px-6 py-5 border-b border-slate-50 flex justify-between items-center bg-white">
              <div className="flex flex-col gap-1.5">
-                <div className="flex items-center gap-2 text-slate-900 font-bold text-xs"><MapPin size={14} className="text-[#471396]" /> {restaurant?.address}</div>
+                <div className="flex items-center gap-2 text-slate-900 font-bold text-xs"><MapPin size={14} className="text-[#471396]" /> {restaurant?.city}</div>
                 <div className="flex items-center gap-2 text-slate-400 font-bold text-[10px] uppercase tracking-tighter"><Clock size={12} /> {restaurant?.time}</div>
              </div>
              <button className="w-10 h-10 bg-slate-50 rounded-full flex items-center justify-center text-[#471396] shadow-sm"><Phone size={18} /></button>

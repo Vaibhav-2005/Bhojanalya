@@ -17,33 +17,53 @@ export default function AdminDashboard() {
   const [requests, setRequests] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // --- 1. DATA FETCHING ---
+  // --- 1. AUTH & DATA FETCHING ---
   useEffect(() => {
     const token = localStorage.getItem('token');
+    
+    // Step A: Basic Token Check
     if (!token) {
       router.push('/auth');
       return;
     }
 
-    const fetchRequests = async () => {
-      try {
-        const data = await apiRequest('/admin/menus/pending');
-        const list = Array.isArray(data) ? data : (data.pending_menus || []);
-        
-        const safeList = list.map((item: any) => ({
-          ...item,
-          _ui_key: `req-${item.id}` 
-        }));
-        
-        setRequests(safeList);
-      } catch (err) {
-        console.error("Admin fetch error", err);
-      } finally {
-        setLoading(false);
-      }
-    };
+    try {
+      // Step B: Decode JWT to check Role
+      const payload = JSON.parse(window.atob(token.split('.')[1]));
+      const role = (payload.role || "").toUpperCase();
 
-    fetchRequests();
+      // Step C: Role Shield - Redirect non-admins to their dashboard
+      if (role !== "ADMIN") {
+        router.replace('/deals'); 
+        return;
+      }
+
+      // Step D: Only fetch if user is confirmed ADMIN
+      const fetchRequests = async () => {
+        try {
+          const data = await apiRequest('/admin/menus/pending');
+          const list = Array.isArray(data) ? data : (data.pending_menus || []);
+          
+          const safeList = list.map((item: any) => ({
+            ...item,
+            _ui_key: `req-${item.id}` 
+          }));
+          
+          setRequests(safeList);
+        } catch (err) {
+          console.error("Admin fetch error", err);
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      fetchRequests();
+
+    } catch (e) {
+      // Step E: Handle corrupt tokens
+      localStorage.clear();
+      router.replace('/auth');
+    }
   }, [router]);
 
   const toggleExpand = (key: string | number) => {
@@ -63,7 +83,10 @@ export default function AdminDashboard() {
 
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center bg-[#F8F9FB]">
-      <Loader2 className="w-10 h-10 animate-spin text-[#471396]" />
+      <div className="flex flex-col items-center gap-4">
+        <Loader2 className="w-10 h-10 animate-spin text-[#471396]" />
+        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Verifying Admin Shield...</p>
+      </div>
     </div>
   );
 
@@ -74,7 +97,7 @@ export default function AdminDashboard() {
       <div className="bg-[#2e0561] pt-16 pb-32 px-8 text-white relative z-0 shadow-2xl">
         <div className="max-w-6xl mx-auto flex justify-between items-center">
           <div>
-            <h1 className="text-4xl font-black tracking-tight">Restaurant Approvals</h1>
+            <h1 className="text-4xl font-black tracking-tight text-white">Restaurant Approvals</h1>
             <p className="text-white/40 text-sm mt-1 font-medium">Review AI-parsed menu data and approve for live status.</p>
           </div>
           <div className="bg-white/10 px-6 py-3 rounded-2xl border border-white/10 backdrop-blur-xl flex items-center gap-4">
@@ -198,7 +221,7 @@ export default function AdminDashboard() {
               <div className="w-20 h-20 bg-emerald-50 text-emerald-500 rounded-full flex items-center justify-center mx-auto mb-6">
                 <CheckCircle2 size={40} />
               </div>
-              <h3 className="text-2xl font-black text-slate-800 tracking-tight">Queue Empty</h3>
+              <h3 className="text-2xl font-black text-slate-800 tracking-tight text-slate-800">Queue Empty</h3>
               <p className="text-slate-400 font-medium mt-2">All parsed data has been verified.</p>
             </div>
           )}
